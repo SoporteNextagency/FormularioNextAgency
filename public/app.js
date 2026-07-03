@@ -1,9 +1,9 @@
 // =============================================
 // CLAVES APP — Lógica Frontend (app.js)
+// Usando Web Speech API (100% Gratis)
 // =============================================
 
 // ─── Preguntas del cuestionario ──────────────
-// Puedes reemplazar estos textos con las preguntas reales
 const QUESTIONS = [
   "¿Cuál es el objetivo principal que buscas lograr con tu presencia en Meta (Facebook/Instagram) para tu empresa?",
   "¿Quién es tu cliente ideal? Describe brevemente su perfil (edad, intereses, comportamiento de compra).",
@@ -21,11 +21,10 @@ const QUESTIONS = [
 const state = {
   sessionId: null,
   currentQuestion: 0,
-  recordings: new Array(QUESTIONS.length).fill(null), // Blobs de audio
   transcriptions: new Array(QUESTIONS.length).fill(''),
-  mediaRecorder: null,
-  audioChunks: [],
+  recognition: null,
   isRecording: false,
+  currentTranscript: '',
 };
 
 // ─── Elementos del DOM ────────────────────────
@@ -57,7 +56,6 @@ const statusText      = $('statusText');
 const btnRecord       = $('btnRecord');
 const btnStop         = $('btnStop');
 const audioPlayerWrap = $('audioPlayerWrapper');
-const audioPlayer     = $('audioPlayer');
 const transcPreview   = $('transcriptionPreview');
 const transcText      = $('transcriptionText');
 const loadingOverlay  = $('loadingOverlay');
@@ -65,10 +63,57 @@ const btnPrev         = $('btnPrev');
 const btnSaveNext     = $('btnSaveNext');
 
 // ═══════════════════════════════════════════
-// 1. FORMULARIO INICIAL
+// 1. INICIALIZAR RECONOCIMIENTO DE VOZ
+// ═══════════════════════════════════════════
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+if (SpeechRecognition) {
+  state.recognition = new SpeechRecognition();
+  state.recognition.continuous = true;
+  state.recognition.interimResults = true;
+  state.recognition.lang = 'es-ES'; // Español
+
+  state.recognition.onresult = (event) => {
+    let interimTranscript = '';
+    let finalTranscript = '';
+
+    for (let i = event.resultIndex; i < event.results.length; ++i) {
+      if (event.results[i].isFinal) {
+        finalTranscript += event.results[i][0].transcript;
+      } else {
+        interimTranscript += event.results[i][0].transcript;
+      }
+    }
+    
+    // Mostramos lo que va escuchando en vivo
+    state.currentTranscript += finalTranscript;
+    transcText.textContent = state.currentTranscript + interimTranscript;
+    audioPlayerWrap.classList.remove('hidden');
+    transcPreview.classList.remove('hidden');
+  };
+
+  state.recognition.onerror = (event) => {
+    console.error('Error de reconocimiento de voz:', event.error);
+    if (event.error === 'not-allowed') {
+      alert('Debes permitir el acceso al micrófono en tu navegador para grabar.');
+      stopRecording();
+    }
+  };
+
+  state.recognition.onend = () => {
+    // Si se detiene por silencio, pero seguimos grabando, reiniciarlo
+    if (state.isRecording) {
+      try { state.recognition.start(); } catch (e) {}
+    }
+  };
+} else {
+  alert("Tu navegador no soporta el reconocimiento de voz web. Por favor usa Google Chrome, Edge o Safari moderno.");
+}
+
+// ═══════════════════════════════════════════
+// 2. FORMULARIO INICIAL
 // ═══════════════════════════════════════════
 
-// Alternar visibilidad de contraseña
 eyeBtn.addEventListener('click', () => {
   const isPassword = metaPwInput.type === 'password';
   metaPwInput.type = isPassword ? 'text' : 'password';
@@ -77,7 +122,6 @@ eyeBtn.addEventListener('click', () => {
     : `<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>`;
 });
 
-// Medidor de fortaleza de contraseña
 metaPwInput.addEventListener('input', () => {
   const val  = metaPwInput.value;
   const bars = [$('sb1'), $('sb2'), $('sb3'), $('sb4')];
@@ -106,7 +150,6 @@ metaPwInput.addEventListener('input', () => {
   label.style.color = cfg.labelColor;
 });
 
-// Validación y submit del formulario
 initialForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   if (!validateForm()) return;
@@ -160,13 +203,12 @@ function validateForm() {
   return valid;
 }
 
-// Limpiar error al escribir
 ['fullName','companyName','metaUser','metaPassword'].forEach(id => {
   $(id).addEventListener('input', () => $(`fg-${id}`).classList.remove('has-error'));
 });
 
 // ═══════════════════════════════════════════
-// 2. TRANSICIÓN AL QUIZ
+// 3. TRANSICIÓN AL QUIZ
 // ═══════════════════════════════════════════
 
 function goToQuiz() {
@@ -174,15 +216,13 @@ function goToQuiz() {
   viewQuiz.classList.remove('hidden');
   stepBadge.textContent = 'Paso 2 de 2';
 
-  // Crear los dots de progreso
   progressDots.innerHTML = '';
   QUESTIONS.forEach((_, i) => {
     const dot = document.createElement('div');
     dot.className = 'progress-dot';
     dot.id = `dot-${i}`;
     dot.addEventListener('click', () => {
-      // Solo permitir ir a preguntas ya respondidas o la actual
-      if (i <= state.currentQuestion || state.recordings[i - 1]) {
+      if (i <= state.currentQuestion || state.transcriptions[i - 1]) {
         goToQuestion(i);
       }
     });
@@ -193,7 +233,7 @@ function goToQuiz() {
 }
 
 // ═══════════════════════════════════════════
-// 3. LÓGICA DEL QUIZ
+// 4. LÓGICA DEL QUIZ
 // ═══════════════════════════════════════════
 
 function goToQuestion(index) {
@@ -201,37 +241,31 @@ function goToQuestion(index) {
   const total = QUESTIONS.length;
   const percent = Math.round(((index + 1) / total) * 100);
 
-  // Actualizar UI de progreso
   progressLabel.textContent = `Pregunta ${index + 1} de ${total}`;
   progressPercent.textContent = `${percent}%`;
   progressFill.style.width = `${percent}%`;
   questionNumber.textContent = String(index + 1).padStart(2, '0');
 
-  // Animar cambio de pregunta
   questionText.style.animation = 'none';
-  questionText.offsetHeight; // reflow
+  questionText.offsetHeight; 
   questionText.style.animation = 'fadeIn 0.4s ease both';
   questionText.textContent = QUESTIONS[index];
 
-  // Actualizar dots
   document.querySelectorAll('.progress-dot').forEach((d, i) => {
     d.className = 'progress-dot';
     if (i === index) d.classList.add('active');
-    else if (state.recordings[i]) d.classList.add('done');
+    else if (state.transcriptions[i]) d.classList.add('done');
   });
 
-  // Botones de navegación
   btnPrev.disabled = index === 0;
   updateSaveNextBtn();
 
-  // Restaurar estado de grabación para esta pregunta
   resetRecorderUI();
-  if (state.recordings[index]) {
-    showAudioPlayer(state.recordings[index], state.transcriptions[index]);
+  if (state.transcriptions[index]) {
+    showTranscription(state.transcriptions[index]);
   }
 
-  // Status
-  setStatus('Listo para grabar', false);
+  setStatus('Listo para escuchar', false);
 }
 
 function updateSaveNextBtn() {
@@ -246,18 +280,14 @@ function resetRecorderUI() {
   audioPlayerWrap.classList.add('hidden');
   transcPreview.classList.add('hidden');
   loadingOverlay.classList.add('hidden');
-  audioPlayer.src = '';
+  state.currentTranscript = '';
+  transcText.textContent = '';
 }
 
-function showAudioPlayer(blob, transcription) {
-  const url = URL.createObjectURL(blob);
-  audioPlayer.src = url;
+function showTranscription(text) {
+  transcText.textContent = text;
   audioPlayerWrap.classList.remove('hidden');
-
-  if (transcription) {
-    transcText.textContent = transcription;
-    transcPreview.classList.remove('hidden');
-  }
+  transcPreview.classList.remove('hidden');
 }
 
 function setStatus(text, recording = false) {
@@ -269,95 +299,88 @@ function setStatus(text, recording = false) {
   }
 }
 
-// ─── Grabación de audio ────────────────────
+// ─── Grabación de audio (Voz a Texto) ──────
 btnRecord.addEventListener('click', startRecording);
 btnStop.addEventListener('click', stopRecording);
 
 async function startRecording() {
+  if (!state.recognition) {
+    alert("Reconocimiento de voz no soportado. Por favor, escribe tu respuesta manualmente o usa Google Chrome.");
+    return;
+  }
+  
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    state.audioChunks = [];
-    state.mediaRecorder = new MediaRecorder(stream, { mimeType: getSupportedMimeType() });
+    // Pedir permiso de micrófono primero (buena práctica aunque la API a veces lo hace)
+    await navigator.mediaDevices.getUserMedia({ audio: true });
+    
+    state.currentTranscript = '';
+    transcText.textContent = 'Te estoy escuchando...';
+    audioPlayerWrap.classList.remove('hidden');
+    transcPreview.classList.remove('hidden');
 
-    state.mediaRecorder.ondataavailable = (e) => {
-      if (e.data.size > 0) state.audioChunks.push(e.data);
-    };
-
-    state.mediaRecorder.onstop = () => {
-      stream.getTracks().forEach(t => t.stop()); // Liberar micrófono
-      const mimeType = getSupportedMimeType();
-      const blob = new Blob(state.audioChunks, { type: mimeType });
-      state.recordings[state.currentQuestion] = blob;
-      showAudioPlayer(blob, null);
-      uploadAndTranscribe(blob);
-    };
-
-    state.mediaRecorder.start(100); // Chunks cada 100ms
     state.isRecording = true;
+    state.recognition.start();
 
     btnRecord.disabled = true;
     btnRecord.classList.add('recording');
     btnStop.disabled = false;
-    setStatus('🔴 Grabando... Habla claramente', true);
+    setStatus('🔴 Escuchando... Habla claramente', true);
   } catch (err) {
-    if (err.name === 'NotAllowedError') {
-      alert('Permiso de micrófono denegado. Por favor, permite el acceso al micrófono en tu navegador.');
-    } else {
-      alert('Error al acceder al micrófono: ' + err.message);
-    }
+    alert('Para usar el asistente por voz, debes permitir el uso del micrófono.');
     console.error(err);
   }
 }
 
-function stopRecording() {
-  if (state.mediaRecorder && state.isRecording) {
-    state.mediaRecorder.stop();
+async function stopRecording() {
+  if (state.isRecording) {
     state.isRecording = false;
+    state.recognition.stop();
     btnRecord.classList.remove('recording');
     btnStop.disabled = true;
-    setStatus('Procesando audio...', false);
+    setStatus('Guardando respuesta...', false);
+
+    // Guardar el texto final capturado
+    const finalVal = state.currentTranscript.trim() || transcText.textContent.trim();
+    if (finalVal && finalVal !== 'Te estoy escuchando...') {
+      await saveAnswerToServer(finalVal);
+    } else {
+      setStatus('⚠️ No se escuchó nada, intenta de nuevo', false);
+      btnRecord.disabled = false;
+    }
   }
 }
 
-function getSupportedMimeType() {
-  const types = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4'];
-  return types.find(t => MediaRecorder.isTypeSupported(t)) || '';
-}
-
-// ─── Subir audio y transcribir ─────────────
-async function uploadAndTranscribe(blob) {
+// ─── Enviar respuesta al servidor ─────────────
+async function saveAnswerToServer(text) {
   const qi = state.currentQuestion;
   loadingOverlay.classList.remove('hidden');
-  setStatus('Enviando a Whisper AI...', false);
 
   try {
-    const formData = new FormData();
-    formData.append('sessionId', state.sessionId);
-    formData.append('questionIndex', String(qi));
-    formData.append('audio', blob, `pregunta_${qi}.webm`);
-
-    const res = await fetch('/api/audio/upload', {
+    const res = await fetch('/api/session/answer', {
       method: 'POST',
-      body: formData,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: state.sessionId,
+        questionIndex: qi,
+        transcription: text
+      }),
     });
 
     const data = await res.json();
     if (data.success) {
       state.transcriptions[qi] = data.transcription;
-      transcText.textContent = data.transcription;
-      transcPreview.classList.remove('hidden');
-      setStatus('✅ Transcripción lista', false);
+      setStatus('✅ Respuesta guardada', false);
     } else {
       throw new Error(data.error);
     }
   } catch (err) {
-    console.error('Error al transcribir:', err);
-    setStatus('⚠️ Transcripción fallida (audio guardado)', false);
+    console.error('Error al guardar:', err);
+    setStatus('⚠️ Error al guardar respuesta', false);
   } finally {
     loadingOverlay.classList.add('hidden');
-    // Actualizar el dot a "done"
     const dot = $(`dot-${qi}`);
     if (dot) dot.classList.add('done');
+    btnRecord.disabled = false; // Permitir re-grabar
   }
 }
 
@@ -379,7 +402,7 @@ btnSaveNext.addEventListener('click', async () => {
 });
 
 // ═══════════════════════════════════════════
-// 4. FINALIZAR SESIÓN
+// 5. FINALIZAR SESIÓN
 // ═══════════════════════════════════════════
 
 async function completeSession() {
@@ -412,8 +435,7 @@ function showSuccess() {
   viewSuccess.classList.remove('hidden');
   stepBadge.textContent = '✅ Completado';
 
-  const answeredCount = state.recordings.filter(Boolean).length;
-  const transcribedCount = state.transcriptions.filter(t => t && !t.startsWith('[Transcripción demo')).length;
+  const transcribedCount = state.transcriptions.filter(t => t.trim().length > 0).length;
 
   $('successStats').innerHTML = `
     <div class="stat-card">
@@ -421,12 +443,8 @@ function showSuccess() {
       <div class="stat-label">Preguntas</div>
     </div>
     <div class="stat-card">
-      <div class="stat-value">${answeredCount}</div>
-      <div class="stat-label">Grabaciones</div>
-    </div>
-    <div class="stat-card">
       <div class="stat-value">${transcribedCount}</div>
-      <div class="stat-label">Transcritas</div>
+      <div class="stat-label">Respuestas dadas</div>
     </div>
   `;
 }

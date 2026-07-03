@@ -1,25 +1,14 @@
 // =============================================
 // CLAVES APP - Servidor Express (Node.js)
 // Configurado para despliegue en Render.com
+// Usa transcripción en el cliente (Web Speech API)
 // =============================================
 require('dotenv').config();
 const express = require('express');
-const multer  = require('multer');
 const cors    = require('cors');
 const path    = require('path');
 const fs      = require('fs');
 const { v4: uuidv4 } = require('uuid');
-
-// ─────────────────────────────────────────────
-// 🔑 CONFIGURACIÓN DE OPENAI
-// En Render: agrega OPENAI_API_KEY en la sección
-// "Environment" de tu servicio web.
-// En local: ponla en el archivo .env
-// ─────────────────────────────────────────────
-const OpenAI = require('openai');
-const openai  = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
 
 // ─────────────────────────────────────────────
 // 📊 URL de SheetDB (Google Sheets)
@@ -36,11 +25,10 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, '../public')));
 
-// ─── Carpeta de uploads ───────────────────────
+// ─── Almacenamiento JSON local ────────────────
 const uploadsDir = path.join(__dirname, '../uploads');
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 
-// ─── Almacenamiento JSON local ────────────────
 const dataFile = path.join(__dirname, '../uploads/data.json');
 const loadData = () => {
   try { return JSON.parse(fs.readFileSync(dataFile, 'utf8')); }
@@ -48,25 +36,8 @@ const loadData = () => {
 };
 const saveData = (data) => fs.writeFileSync(dataFile, JSON.stringify(data, null, 2));
 
-// ─── Multer: almacenamiento temporal de audio ─
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const sessionDir = path.join(uploadsDir, req.body.sessionId || 'unknown');
-    if (!fs.existsSync(sessionDir)) fs.mkdirSync(sessionDir, { recursive: true });
-    cb(null, sessionDir);
-  },
-  filename: (req, file, cb) => {
-    const questionIndex = req.body.questionIndex || '0';
-    cb(null, `pregunta_${questionIndex}.webm`);
-  },
-});
-const upload = multer({ storage });
-
 // ════════════════════════════════════════════
 // 🏓 ENDPOINT PING — Para UptimeRobot
-// Configurar en UptimeRobot: HTTP(s) Monitor
-// URL: https://tu-app.onrender.com/ping
-// Intervalo: cada 14 minutos
 // ════════════════════════════════════════════
 app.get('/ping', (req, res) => {
   res.status(200).json({ status: 'alive', timestamp: new Date().toISOString() });
@@ -108,43 +79,18 @@ app.post('/api/session/start', (req, res) => {
 });
 
 // ════════════════════════════════════════════
-// ENDPOINT 2: Subir audio → Transcribir con Whisper
-// POST /api/audio/upload
+// ENDPOINT 2: Recibir transcripción (Texto)
+// POST /api/session/answer
 // ════════════════════════════════════════════
-app.post('/api/audio/upload', upload.single('audio'), async (req, res) => {
+app.post('/api/session/answer', (req, res) => {
   try {
-    const { sessionId, questionIndex } = req.body;
+    const { sessionId, questionIndex, transcription } = req.body;
 
-    if (!req.file) {
-      return res.status(400).json({ error: 'No se recibió archivo de audio.' });
+    if (!sessionId || transcription === undefined) {
+      return res.status(400).json({ error: 'Faltan datos de la sesión o transcripción.' });
     }
 
-    const audioPath = req.file.path;
-    console.log(`🎙️  Audio recibido — Sesión: ${sessionId} | Pregunta: ${parseInt(questionIndex) + 1}`);
-
-    let transcription = '';
-    const apiKey = process.env.OPENAI_API_KEY;
-
-    if (!apiKey || apiKey.startsWith('sk-xxx')) {
-      // ──────────────────────────────────────
-      // ⚠️  MODO DEMO (sin API Key configurada)
-      // ──────────────────────────────────────
-      console.log('⚠️  Sin API Key real. Usando transcripción demo.');
-      transcription = `[Transcripción demo — Pregunta ${parseInt(questionIndex) + 1}]. Configura OPENAI_API_KEY para activar Whisper.`;
-    } else {
-      // ──────────────────────────────────────
-      // ✅ MODO PRODUCCIÓN — Whisper AI
-      // ──────────────────────────────────────
-      const audioStream = fs.createReadStream(audioPath);
-      const response = await openai.audio.transcriptions.create({
-        file: audioStream,
-        model: 'whisper-1',
-        language: 'es',        // Transcripción en español
-        response_format: 'text',
-      });
-      transcription = response;
-      console.log(`📝 Transcripción: "${transcription.substring(0, 80)}..."`);
-    }
+    console.log(`📝 Respuesta recibida — Sesión: ${sessionId} | Pregunta: ${parseInt(questionIndex) + 1}`);
 
     // Guardar transcripción en la sesión
     const data = loadData();
@@ -152,8 +98,7 @@ app.post('/api/audio/upload', upload.single('audio'), async (req, res) => {
     if (idx !== -1) {
       data[idx].transcriptions[parseInt(questionIndex)] = {
         questionIndex: parseInt(questionIndex),
-        audioFile: req.file.filename,
-        transcription,
+        transcription: transcription || '[Respuesta vacía o inaudible]',
         savedAt: new Date().toISOString(),
       };
       saveData(data);
@@ -161,8 +106,8 @@ app.post('/api/audio/upload', upload.single('audio'), async (req, res) => {
 
     res.json({ success: true, transcription });
   } catch (err) {
-    console.error('Error al procesar audio:', err);
-    res.status(500).json({ error: 'Error al procesar el audio: ' + err.message });
+    console.error('Error al guardar respuesta:', err);
+    res.status(500).json({ error: 'Error al procesar la respuesta: ' + err.message });
   }
 });
 
@@ -219,7 +164,6 @@ app.post('/api/session/complete', async (req, res) => {
       const sheetResult = await sheetRes.json();
       console.log('✅ Google Sheets actualizado:', sheetResult);
     } catch (sheetErr) {
-      // No bloqueamos la respuesta al cliente si falla Sheets
       console.error('⚠️  Error al enviar a Google Sheets:', sheetErr.message);
     }
 
@@ -251,13 +195,6 @@ app.listen(PORT, () => {
   console.log('║   🔑 CLAVES APP — Servidor activo        ║');
   console.log(`║   ➜  http://localhost:${PORT}               ║`);
   console.log('╚═════════════════════════════════════════╝');
-  console.log('');
-  if (!process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY.startsWith('sk-xxx')) {
-    console.log('⚠️  OPENAI_API_KEY no configurada — Modo demo activo');
-    console.log('   Agrega la clave en Render → Environment Variables');
-  } else {
-    console.log('✅ OpenAI Whisper configurado y listo');
-  }
-  console.log('🏓 Endpoint de ping disponible en /ping');
-  console.log('');
+  console.log('✅ Modo 100% Gratuito (Web Speech API) activo');
+  console.log('🏓 Endpoint de ping disponible en /ping\n');
 });
