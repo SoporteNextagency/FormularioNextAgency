@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Claves — Asistente de Entrevista por Voz</title>
+  <meta name="description" content="Asistente inteligente de entrevista por voz con transcripción automática usando IA. Registra tus respuestas y obtén transcripciones precisas en español." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <!-- ═══════════════════════════════════════ -->
+  <!-- FONDO ANIMADO                           -->
+  <!-- ═══════════════════════════════════════ -->
+  <div class="bg-orbs">
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+  </div>
+
+  <!-- ═══════════════════════════════════════ -->
+  <!-- CONTENEDOR PRINCIPAL                    -->
+  <!-- ═══════════════════════════════════════ -->
+  <div class="app-wrapper">
+
+    <!-- Logo / Header -->
+    <header class="app-header">
+      <div class="logo-mark">
+        <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+          <path d="M14 2C7.373 2 2 7.373 2 14s5.373 12 12 12 12-5.373 12-12S20.627 2 14 2zm0 5a3 3 0 110 6 3 3 0 010-6zm0 14.5c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08A7.24 7.24 0 0114 21.5z" fill="currentColor"/>
+        </svg>
+      </div>
+      <span class="logo-text">Claves</span>
+      <div class="step-badge" id="stepBadge">Paso 1 de 2</div>
+    </header>
+
+    <!-- ──────────────────────────────────── -->
+    <!-- VISTA 1: FORMULARIO INICIAL          -->
+    <!-- ──────────────────────────────────── -->
+    <main class="card" id="viewForm">
+      <div class="card-glow"></div>
+
+      <div class="card-header">
+        <div class="step-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+            <circle cx="12" cy="7" r="4"/>
+          </svg>
+        </div>
+        <div>
+          <h1 class="card-title">Tus datos de acceso</h1>
+          <p class="card-subtitle">Completa la información para comenzar la entrevista</p>
+        </div>
+      </div>
+
+      <form id="initialForm" novalidate>
+        <div class="fields-grid">
+
+          <!-- Nombre completo -->
+          <div class="field-group" id="fg-fullName">
+            <label class="field-label" for="fullName">Nombre completo</label>
+            <div class="input-wrapper">
+              <svg class="input-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                <circle cx="12" cy="7" r="4"/>
+              </svg>
+              <input type="text" id="fullName" class="field-input" placeholder="Ej. María García López" autocomplete="name" />
+            </div>
+            <span class="field-error" id="err-fullName">Este campo es requerido</span>
+          </div>
+
+          <!-- Nombre de empresa -->
+          <div class="field-group" id="fg-companyName">
+            <label class="field-label" for="companyName">Nombre de la empresa</label>
+            <div class="input-wrapper">
+              <svg class="input-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="2" y="7" width="20" height="14" rx="2"/>
+                <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
+              </svg>
+              <input type="text" id="companyName" class="field-input" placeholder="Ej. Acme Corp S.A." autocomplete="organization" />
+            </div>
+            <span class="field-error" id="err-companyName">Este campo es requerido</span>
+          </div>
+
+          <!-- Usuario de Meta -->
+          <div class="field-group" id="fg-metaUser">
+            <label class="field-label" for="metaUser">Usuario de Meta</label>
+            <div class="input-wrapper">
+              <svg class="input-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/>
+                <circle cx="12" cy="10" r="3"/>
+              </svg>
+              <input type="text" id="metaUser" class="field-input" placeholder="@tu_usuario" autocomplete="username" />
+            </div>
+            <span class="field-error" id="err-metaUser">Este campo es requerido</span>
+          </div>
+
+          <!-- Clave de Meta -->
+          <div class="field-group" id="fg-metaPassword">
+            <label class="field-label" for="metaPassword">Clave de Meta</label>
+            <div class="input-wrapper">
+              <svg class="input-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+              </svg>
+              <input type="password" id="metaPassword" class="field-input" placeholder="Tu contraseña segura" autocomplete="current-password" />
+              <button type="button" class="eye-btn" id="eyeBtn" aria-label="Mostrar/ocultar contraseña">
+                <svg id="eyeIcon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                  <circle cx="12" cy="12" r="3"/>
+                </svg>
+              </button>
+            </div>
+            <span class="field-error" id="err-metaPassword">Este campo es requerido</span>
+
+            <!-- Medidor de fortaleza -->
+            <div class="strength-meter" id="strengthMeter">
+              <div class="strength-bars">
+                <div class="strength-bar" id="sb1"></div>
+                <div class="strength-bar" id="sb2"></div>
+                <div class="strength-bar" id="sb3"></div>
+                <div class="strength-bar" id="sb4"></div>
+              </div>
+              <span class="strength-label" id="strengthLabel">Ingresa una contraseña</span>
+            </div>
+          </div>
+
+        </div>
+
+        <button type="submit" class="btn-primary" id="btnNext">
+          <span>Siguiente</span>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M5 12h14M12 5l7 7-7 7"/>
+          </svg>
+        </button>
+      </form>
+    </main>
+
+    <!-- ──────────────────────────────────── -->
+    <!-- VISTA 2: CUESTIONARIO POR VOZ        -->
+    <!-- ──────────────────────────────────── -->
+    <main class="card card--quiz hidden" id="viewQuiz">
+      <div class="card-glow card-glow--purple"></div>
+
+      <!-- Progreso -->
+      <div class="quiz-progress">
+        <div class="progress-header">
+          <span class="progress-label" id="progressLabel">Pregunta 1 de 10</span>
+          <span class="progress-percent" id="progressPercent">10%</span>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill" id="progressFill" style="width: 10%"></div>
+        </div>
+      </div>
+
+      <!-- Dots de navegación -->
+      <div class="progress-dots" id="progressDots"></div>
+
+      <!-- Contenido de la pregunta -->
+      <div class="question-area">
+        <div class="question-number" id="questionNumber">01</div>
+        <h2 class="question-text" id="questionText">Cargando pregunta...</h2>
+      </div>
+
+      <!-- Estado del grabador -->
+      <div class="recorder-status" id="recorderStatus">
+        <div class="status-pulse hidden" id="statusPulse"></div>
+        <span class="status-text" id="statusText">Listo para grabar</span>
+      </div>
+
+      <!-- Controles de grabación -->
+      <div class="recorder-controls">
+        <button class="btn-record" id="btnRecord" aria-label="Grabar respuesta">
+          <div class="btn-record__inner">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+              <line x1="12" y1="19" x2="12" y2="23"/>
+              <line x1="8" y1="23" x2="16" y2="23"/>
+            </svg>
+          </div>
+          <span>Grabar</span>
+        </button>
+
+        <button class="btn-stop" id="btnStop" disabled aria-label="Detener grabación">
+          <div class="btn-stop__inner">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+              <rect x="4" y="4" width="16" height="16" rx="2"/>
+            </svg>
+          </div>
+          <span>Detener</span>
+        </button>
+      </div>
+
+      <!-- Reproductor de audio -->
+      <div class="audio-player hidden" id="audioPlayerWrapper">
+        <div class="audio-player__label">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+            <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+            <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+          </svg>
+          <span>Tu respuesta grabada</span>
+        </div>
+        <audio id="audioPlayer" controls class="audio-element"></audio>
+        <div class="transcription-preview hidden" id="transcriptionPreview">
+          <div class="transcription-header">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="16" y1="13" x2="8" y2="13"/>
+              <line x1="16" y1="17" x2="8" y2="17"/>
+              <polyline points="10 9 9 9 8 9"/>
+            </svg>
+            <span>Transcripción (Whisper AI)</span>
+          </div>
+          <p class="transcription-text" id="transcriptionText"></p>
+        </div>
+      </div>
+
+      <!-- Spinner de carga -->
+      <div class="loading-overlay hidden" id="loadingOverlay">
+        <div class="spinner"></div>
+        <p>Transcribiendo con Whisper AI...</p>
+      </div>
+
+      <!-- Navegación -->
+      <div class="quiz-nav">
+        <button class="btn-secondary" id="btnPrev" disabled>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M19 12H5M12 19l-7-7 7-7"/>
+          </svg>
+          <span>Anterior</span>
+        </button>
+
+        <button class="btn-primary btn-save" id="btnSaveNext">
+          <span>Guardar y Continuar</span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M5 12h14M12 5l7 7-7 7"/>
+          </svg>
+        </button>
+      </div>
+    </main>
+
+    <!-- ──────────────────────────────────── -->
+    <!-- VISTA 3: PANTALLA FINAL              -->
+    <!-- ──────────────────────────────────── -->
+    <main class="card card--success hidden" id="viewSuccess">
+      <div class="card-glow card-glow--green"></div>
+      <div class="success-animation">
+        <div class="success-circle">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+        </div>
+      </div>
+      <h1 class="success-title">¡Entrevista completada!</h1>
+      <p class="success-subtitle">Tus respuestas han sido guardadas y transcritas exitosamente.</p>
+      <div class="success-stats" id="successStats"></div>
+      <button class="btn-primary" onclick="location.reload()">
+        <span>Nueva entrevista</span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="23 4 23 10 17 10"/>
+          <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+        </svg>
+      </button>
+    </main>
+
+  </div><!-- /.app-wrapper -->
+
+  <script src="app.js"></script>
+</body>
+</html>
