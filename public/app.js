@@ -1,30 +1,47 @@
 // =============================================
 // CLAVES APP — Lógica Frontend (app.js)
-// Usando Web Speech API (100% Gratis)
 // =============================================
 
-// ─── Preguntas del cuestionario ──────────────
-const QUESTIONS = [
-  "¿Cuál es el objetivo principal que buscas lograr con tu presencia en Meta (Facebook/Instagram) para tu empresa?",
-  "¿Quién es tu cliente ideal? Describe brevemente su perfil (edad, intereses, comportamiento de compra).",
-  "¿Cuál es el producto o servicio que más quieres promocionar en este momento y por qué?",
-  "¿Cuánto presupuesto mensual tienes disponible actualmente para invertir en publicidad pagada en Meta?",
-  "¿Has realizado campañas de publicidad en Meta anteriormente? Si es así, ¿cuáles fueron tus resultados?",
-  "¿Cuál es el principal reto o problema que enfrentas hoy en tu estrategia de marketing digital?",
-  "¿Qué acción específica quieres que tome el usuario al ver tu anuncio? (Ej: comprar, suscribirse, escribirte, visitar tu sitio)",
-  "¿Tienes contenido visual (fotos, videos) listo para usar en tus campañas, o necesitas crearlo desde cero?",
-  "¿Cómo mides actualmente el éxito de tus esfuerzos de marketing? ¿Qué indicadores usas?",
-  "¿Hay algún competidor en tu sector cuya estrategia digital admires o de quien quieras diferenciarte? Cuéntanos un poco sobre ello.",
+const SHEETDB_URL = 'https://sheetdb.io/api/v1/tpz4wdwvpet8d';
+const CASES_URL   = 'https://sheetdb.io/api/v1/6sty8p65pjvjk?sheet=casos';
+
+// ─── Preguntas del cuestionario (por defecto) ────────────────
+const QUESTIONS_DEFAULT = [
+  { id: 'Nombre del Bot', q: '¿Qué nombre interno le daremos a este bot? (Ej. Bot de Ventas, Virtual Concierge)', placeholder: 'Ej. Asistente de Soporte' },
+  { id: 'Canales', q: '¿En qué canales operará este agente? (Ej. WhatsApp, Instagram DM, Web Chat)', placeholder: 'Ej. WhatsApp e Instagram' },
+  { id: 'Retraso de Respuesta', q: '¿Quieres que responda instantáneamente o prefieres un retraso simulado (ej. 2 a 5 segundos)?', placeholder: 'Ej. Retraso de 3 segundos para que parezca más humano.' },
+  { id: 'Enlaces Web', q: 'Proporciona los enlaces (URLs) de los que el bot debe aprender.', placeholder: 'https://miweb.com/about\nhttps://miweb.com/servicios' },
+  { id: 'FAQs', q: 'Enumera de 5 a 10 preguntas frecuentes de tus clientes con sus respuestas.', placeholder: 'P: ¿Hacen envíos?\nR: Sí, a todo el país.' },
+  { id: 'Contexto de Conversación', q: 'Contexto de la conversación: ¿Cuál es la situación típica por la que te contactan?', placeholder: 'Ej. El cliente vio un anuncio y quiere saber los precios.' },
+  { id: 'Rol del Agente', q: '¿Quién es el agente dentro de tu empresa? (Ej. Secretaria amigable, Soporte experto)', placeholder: 'Ej. Un vendedor amable y experto en tecnología.' },
+  { id: 'Estilo, Tono e Idioma', q: 'Define su estilo de escritura, su tono (ej. Empático, Formal) y la política de idioma.', placeholder: 'Ej. Tono empático y profesional. Siempre responder en español.' },
+  { id: 'Objetivo Principal', q: 'Objetivo principal: ¿Qué debe lograr el agente al final de la charla?', placeholder: 'Ej. Agendar una cita.' },
+  { id: 'Guion / Flujo', q: 'Describe la secuencia o flujo de preguntas paso a paso.', placeholder: '1. Saludar\n2. Preguntar el problema\n3. Ofrecer solución' },
+  { id: 'Objeciones Comunes', q: '¿Qué debe responder ante las 2 o 3 dudas o quejas más típicas?', placeholder: 'Si dicen "muy caro", responde con el valor agregado.' },
+  { id: 'Límites Estrictos', q: 'Reglas inquebrantables: ¿Qué cosas NO debe hacer o decir NUNCA el agente?', placeholder: 'Ej. NUNCA dar descuentos sin autorización.' },
+  { id: 'Ejemplo 1', q: 'Ejemplo 1 de comportamiento. Escribe qué EVITAR y qué USAR en su lugar.', placeholder: 'EVITAR: "Cuesta $100."\nUSAR: "Te paso los planes detallados..."' },
+  { id: 'Ejemplo 2', q: 'Ejemplo 2 de comportamiento. Escribe qué EVITAR y qué USAR en su lugar.', placeholder: 'EVITAR: ...\nUSAR: ...' },
+  { id: 'Resumen de Oferta', q: 'Haz un resumen breve de tu oferta principal o servicios clave.', placeholder: 'Ofrecemos automatización con IA...' },
+  { id: 'Transferencia a Humanos', q: '¿Bajo qué situaciones exactas el bot debe transferir a un humano?', placeholder: 'Ej. Cuando el cliente pida hablar con un humano o se note molesto.' },
+  { id: 'Seguimiento Automático', q: '¿Debe hacer seguimiento si el cliente no responde? ¿Cuándo y qué debe decir?', placeholder: 'Ej. Escribir a las 24 horas preguntando si sigue interesado.' },
+  { id: 'Integraciones', q: '¿Con qué herramientas debe conectarse el bot para registrar la info? (Ej. HubSpot, Calendly)', placeholder: 'Ej. Guardar contactos en HubSpot' }
 ];
 
-// ─── Estado global ────────────────────────────
+// Se llena dinámicamente al iniciar (carga desde Sheets o usa defaults)
+let QUESTIONS = [...QUESTIONS_DEFAULT];
+
+// ─── Estado global ────────────────────────────────────────
 const state = {
-  sessionId: null,
+  sessionId: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15),
+  fullName: '',
+  companyName: '',
+  metaUser: '',
+  metaPasswordPreview: '',
   currentQuestion: 0,
-  transcriptions: new Array(QUESTIONS.length).fill(''),
+  transcriptions: new Array(QUESTIONS_DEFAULT.length).fill(''),
   recognition: null,
   isRecording: false,
-  currentTranscript: '',
+  questionsReady: false,
 };
 
 // ─── Elementos del DOM ────────────────────────
@@ -51,13 +68,10 @@ const progressPercent = $('progressPercent');
 const progressDots    = $('progressDots');
 const questionNumber  = $('questionNumber');
 const questionText    = $('questionText');
-const statusPulse     = $('statusPulse');
-const statusText      = $('statusText');
+
+const answerTextarea  = $('answerTextarea');
 const btnRecord       = $('btnRecord');
 const btnStop         = $('btnStop');
-const audioPlayerWrap = $('audioPlayerWrapper');
-const transcPreview   = $('transcriptionPreview');
-const transcText      = $('transcriptionText');
 const loadingOverlay  = $('loadingOverlay');
 const btnPrev         = $('btnPrev');
 const btnSaveNext     = $('btnSaveNext');
@@ -71,7 +85,7 @@ if (SpeechRecognition) {
   state.recognition = new SpeechRecognition();
   state.recognition.continuous = true;
   state.recognition.interimResults = true;
-  state.recognition.lang = 'es-ES'; // Español
+  state.recognition.lang = 'es-ES';
 
   state.recognition.onresult = (event) => {
     let interimTranscript = '';
@@ -79,17 +93,20 @@ if (SpeechRecognition) {
 
     for (let i = event.resultIndex; i < event.results.length; ++i) {
       if (event.results[i].isFinal) {
-        finalTranscript += event.results[i][0].transcript;
+        finalTranscript += event.results[i][0].transcript + ' ';
       } else {
         interimTranscript += event.results[i][0].transcript;
       }
     }
     
-    // Mostramos lo que va escuchando en vivo
-    state.currentTranscript += finalTranscript;
-    transcText.textContent = state.currentTranscript + interimTranscript;
-    audioPlayerWrap.classList.remove('hidden');
-    transcPreview.classList.remove('hidden');
+    // Anexamos lo que ya estaba escrito en el textarea
+    const currentVal = state.baseTranscript || '';
+    answerTextarea.value = currentVal + finalTranscript + interimTranscript;
+    
+    // Si la frase es final, actualizamos el baseTranscript
+    if (finalTranscript) {
+      state.baseTranscript = currentVal + finalTranscript;
+    }
   };
 
   state.recognition.onerror = (event) => {
@@ -101,18 +118,62 @@ if (SpeechRecognition) {
   };
 
   state.recognition.onend = () => {
-    // Si se detiene por silencio, pero seguimos grabando, reiniciarlo
     if (state.isRecording) {
       try { state.recognition.start(); } catch (e) {}
     }
   };
-} else {
-  alert("Tu navegador no soporta el reconocimiento de voz web. Por favor usa Google Chrome, Edge o Safari moderno.");
 }
 
 // ═══════════════════════════════════════════
-// 2. FORMULARIO INICIAL
+// 0. CARGAR PREGUNTAS DESDE SHEETS (si el admin las editó)
 // ═══════════════════════════════════════════
+async function loadQuestionsFromSheets() {
+  try {
+    const res  = await fetch(`${SHEETDB_URL}/search?Session ID=__QUESTIONS_CONFIG__`);
+    const data = await res.json();
+    if (data && data.length && data[0]['__questions_json__']) {
+      const loaded = JSON.parse(data[0]['__questions_json__']);
+      if (Array.isArray(loaded) && loaded.length) {
+        QUESTIONS = loaded;
+        state.transcriptions = new Array(QUESTIONS.length).fill('');
+      }
+    }
+  } catch(e) {
+    // Si falla la carga, usamos los defaults (ya asignados)
+    console.warn('No se pudo cargar la plantilla de preguntas, usando defaults.');
+  }
+}
+
+// Cargar preguntas al iniciar la página — diferido para no bloquear el render inicial
+// Usamos setTimeout(0) para que la página se pinte primero y el fetch ocurra después
+setTimeout(() => loadQuestionsFromSheets(), 0);
+
+// ═══════════════════════════════════════════
+// 2. FORMULARIO INICIAL Y ACORDEONES
+// ═══════════════════════════════════════════
+
+window.toggleAccordion = (id) => {
+  const allAccs = ['registro', 'consulta'];
+  
+  allAccs.forEach(acc => {
+    const el = document.getElementById(`acc-${acc}`);
+    const content = document.getElementById(`content-${acc}`);
+    if (acc === id) {
+      const isOpen = el.classList.contains('open');
+      if (isOpen) {
+        el.classList.remove('open');
+        content.style.display = 'none';
+      } else {
+        el.classList.add('open');
+        content.style.display = 'block';
+      }
+    } else {
+      el.classList.remove('open');
+      content.style.display = 'none';
+    }
+  });
+};
+
 
 eyeBtn.addEventListener('click', () => {
   const isPassword = metaPwInput.type === 'password';
@@ -150,36 +211,80 @@ metaPwInput.addEventListener('input', () => {
   label.style.color = cfg.labelColor;
 });
 
-initialForm.addEventListener('submit', async (e) => {
+initialForm.addEventListener('submit', (e) => {
   e.preventDefault();
   if (!validateForm()) return;
 
-  const btn = $('btnNext');
-  btn.disabled = true;
-  btn.querySelector('span').textContent = 'Iniciando...';
+  state.fullName = fullNameInput.value.trim();
+  state.companyName = companyInput.value.trim();
+  state.metaUser = metaUserInput.value.trim();
+  state.metaPasswordPreview = metaPwInput.value.substring(0, 3) + '***';
 
+  goToQuiz();
+});
+
+const queryForm = document.getElementById('queryForm');
+queryForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  
+  const fn = document.getElementById('q-fullName');
+  const cn = document.getElementById('q-companyName');
+  const msg = document.getElementById('q-message');
+  
+  let isValid = true;
+  [fn, cn, msg].forEach(input => {
+    if (!input.value.trim()) {
+      input.classList.add('invalid');
+      document.getElementById(`err-${input.id}`).style.display = 'block';
+      isValid = false;
+    } else {
+      input.classList.remove('invalid');
+      document.getElementById(`err-${input.id}`).style.display = 'none';
+    }
+  });
+  
+  if (!isValid) return;
+  
+  const btnText = document.getElementById('q-btnText');
+  const btnLoader = document.getElementById('q-btnLoader');
+  const btnSubmit = document.getElementById('q-btnSubmit');
+  const successMsg = document.getElementById('q-successMessage');
+  
+  btnText.style.display = 'none';
+  btnLoader.style.display = 'block';
+  btnSubmit.disabled = true;
+  
   try {
-    const res = await fetch('/api/session/start', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        fullName:     fullNameInput.value.trim(),
-        companyName:  companyInput.value.trim(),
-        metaUser:     metaUserInput.value.trim(),
-        metaPassword: metaPwInput.value,
-      }),
-    });
-
+    // 1. Contar consultas existentes para enumerarlas
+    const res = await fetch(CASES_URL);
     const data = await res.json();
-    if (!data.success) throw new Error(data.error);
+    const nextQueryNum = Array.isArray(data) ? data.length + 1 : 1;
 
-    state.sessionId = data.sessionId;
-    goToQuiz();
+    const sheetData = {
+      'Fecha consulta': new Date().toISOString(),
+      'Nombre completo': fn.value.trim(),
+      'Nombre de la empresa': cn.value.trim(),
+      'Tu consulta': msg.value.trim(),
+      'Especialista': '',
+      'NumeroConsulta': nextQueryNum
+    };
+    
+    await fetch(CASES_URL, {
+      method: 'POST',
+      headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data: [sheetData] }),
+    });
+    
+    queryForm.reset();
+    successMsg.style.display = 'block';
+    setTimeout(() => successMsg.style.display = 'none', 5000);
   } catch (err) {
-    console.error(err);
-    alert('Error al iniciar la sesión. Por favor, intenta de nuevo.');
-    btn.disabled = false;
-    btn.querySelector('span').textContent = 'Siguiente';
+    console.error('Error enviando consulta:', err);
+    alert('Error enviando la consulta. Inténtalo de nuevo.');
+  } finally {
+    btnText.style.display = 'inline';
+    btnLoader.style.display = 'none';
+    btnSubmit.disabled = false;
   }
 });
 
@@ -223,6 +328,7 @@ function goToQuiz() {
     dot.id = `dot-${i}`;
     dot.addEventListener('click', () => {
       if (i <= state.currentQuestion || state.transcriptions[i - 1]) {
+        saveCurrentAnswer(); // Guardar antes de saltar
         goToQuestion(i);
       }
     });
@@ -233,11 +339,12 @@ function goToQuiz() {
 }
 
 // ═══════════════════════════════════════════
-// 4. LÓGICA DEL QUIZ
+// 4. LÓGICA DEL QUIZ (Híbrido)
 // ═══════════════════════════════════════════
 
 function goToQuestion(index) {
   state.currentQuestion = index;
+  const qData = QUESTIONS[index];
   const total = QUESTIONS.length;
   const percent = Math.round(((index + 1) / total) * 100);
 
@@ -249,7 +356,7 @@ function goToQuestion(index) {
   questionText.style.animation = 'none';
   questionText.offsetHeight; 
   questionText.style.animation = 'fadeIn 0.4s ease both';
-  questionText.textContent = QUESTIONS[index];
+  questionText.textContent = qData.q;
 
   document.querySelectorAll('.progress-dot').forEach((d, i) => {
     d.className = 'progress-dot';
@@ -257,15 +364,14 @@ function goToQuestion(index) {
     else if (state.transcriptions[i]) d.classList.add('done');
   });
 
-  btnPrev.disabled = index === 0;
+  // En pregunta 1, el botón Anterior NUNCA se deshabilita (regresa al form)
+  btnPrev.disabled = false;
   updateSaveNextBtn();
-
   resetRecorderUI();
-  if (state.transcriptions[index]) {
-    showTranscription(state.transcriptions[index]);
-  }
 
-  setStatus('Listo para escuchar', false);
+  // Mostrar el valor actual si ya fue respondido
+  answerTextarea.placeholder = qData.placeholder || 'Escribe aquí tu respuesta o usa el micrófono...';
+  answerTextarea.value = state.transcriptions[index] || '';
 }
 
 function updateSaveNextBtn() {
@@ -274,126 +380,78 @@ function updateSaveNextBtn() {
 }
 
 function resetRecorderUI() {
+  if (state.isRecording) stopRecording();
   btnRecord.disabled = false;
   btnRecord.classList.remove('recording');
   btnStop.disabled = true;
-  audioPlayerWrap.classList.add('hidden');
-  transcPreview.classList.add('hidden');
-  loadingOverlay.classList.add('hidden');
-  state.currentTranscript = '';
-  transcText.textContent = '';
 }
 
-function showTranscription(text) {
-  transcText.textContent = text;
-  audioPlayerWrap.classList.remove('hidden');
-  transcPreview.classList.remove('hidden');
-}
-
-function setStatus(text, recording = false) {
-  statusText.textContent = text;
-  if (recording) {
-    statusPulse.classList.remove('hidden');
-  } else {
-    statusPulse.classList.add('hidden');
-  }
-}
-
-// ─── Grabación de audio (Voz a Texto) ──────
+// ─── Lógica para Grabación ──────────
 btnRecord.addEventListener('click', startRecording);
 btnStop.addEventListener('click', stopRecording);
 
 async function startRecording() {
   if (!state.recognition) {
-    alert("Reconocimiento de voz no soportado. Por favor, escribe tu respuesta manualmente o usa Google Chrome.");
+    alert("Reconocimiento de voz no soportado. Usa Chrome o Edge.");
     return;
   }
   
   try {
-    // Pedir permiso de micrófono primero (buena práctica aunque la API a veces lo hace)
     await navigator.mediaDevices.getUserMedia({ audio: true });
     
-    state.currentTranscript = '';
-    transcText.textContent = 'Te estoy escuchando...';
-    audioPlayerWrap.classList.remove('hidden');
-    transcPreview.classList.remove('hidden');
-
+    // Tomar lo que ya haya escrito el usuario como base
+    state.baseTranscript = answerTextarea.value + (answerTextarea.value ? ' ' : '');
+    
     state.isRecording = true;
     state.recognition.start();
 
     btnRecord.disabled = true;
     btnRecord.classList.add('recording');
+    btnRecord.querySelector('span').textContent = 'Grabando...';
     btnStop.disabled = false;
-    setStatus('🔴 Escuchando... Habla claramente', true);
   } catch (err) {
-    alert('Para usar el asistente por voz, debes permitir el uso del micrófono.');
-    console.error(err);
+    alert('Debes permitir el uso del micrófono.');
   }
 }
 
-async function stopRecording() {
+function stopRecording() {
   if (state.isRecording) {
     state.isRecording = false;
     state.recognition.stop();
     btnRecord.classList.remove('recording');
+    btnRecord.querySelector('span').textContent = 'Usar Voz';
     btnStop.disabled = true;
-    setStatus('Guardando respuesta...', false);
-
-    // Guardar el texto final capturado
-    const finalVal = state.currentTranscript.trim() || transcText.textContent.trim();
-    if (finalVal && finalVal !== 'Te estoy escuchando...') {
-      await saveAnswerToServer(finalVal);
-    } else {
-      setStatus('⚠️ No se escuchó nada, intenta de nuevo', false);
-      btnRecord.disabled = false;
-    }
   }
 }
 
-// ─── Enviar respuesta al servidor ─────────────
-async function saveAnswerToServer(text) {
-  const qi = state.currentQuestion;
-  loadingOverlay.classList.remove('hidden');
-
-  try {
-    const res = await fetch('/api/session/answer', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        sessionId: state.sessionId,
-        questionIndex: qi,
-        transcription: text
-      }),
-    });
-
-    const data = await res.json();
-    if (data.success) {
-      state.transcriptions[qi] = data.transcription;
-      setStatus('✅ Respuesta guardada', false);
-    } else {
-      throw new Error(data.error);
-    }
-  } catch (err) {
-    console.error('Error al guardar:', err);
-    setStatus('⚠️ Error al guardar respuesta', false);
-  } finally {
-    loadingOverlay.classList.add('hidden');
-    const dot = $(`dot-${qi}`);
+// ─── Guardar Respuesta ─────────────────────
+function saveCurrentAnswer() {
+  const val = answerTextarea.value.trim();
+  if (val) {
+    state.transcriptions[state.currentQuestion] = val;
+    const dot = $(`dot-${state.currentQuestion}`);
     if (dot) dot.classList.add('done');
-    btnRecord.disabled = false; // Permitir re-grabar
   }
 }
 
 // ─── Navegación del quiz ───────────────────
 btnPrev.addEventListener('click', () => {
   if (state.currentQuestion > 0) {
+    saveCurrentAnswer();
     goToQuestion(state.currentQuestion - 1);
+  } else {
+    // Pregunta 1 → regresar al formulario inicial
+    if (state.isRecording) stopRecording();
+    viewQuiz.classList.add('hidden');
+    viewForm.classList.remove('hidden');
+    stepBadge.textContent = 'Paso 1 de 2';
   }
 });
 
 btnSaveNext.addEventListener('click', async () => {
-  const isLast = state.currentQuestion === QUESTIONS.length - 1;
+  saveCurrentAnswer();
 
+  const isLast = state.currentQuestion === QUESTIONS.length - 1;
   if (isLast) {
     await completeSession();
   } else {
@@ -402,31 +460,50 @@ btnSaveNext.addEventListener('click', async () => {
 });
 
 // ═══════════════════════════════════════════
-// 5. FINALIZAR SESIÓN
+// 5. FINALIZAR SESIÓN (Google Sheets)
 // ═══════════════════════════════════════════
 
 async function completeSession() {
   btnSaveNext.disabled = true;
-  btnSaveNext.querySelector('span').textContent = 'Finalizando...';
+  btnSaveNext.querySelector('span').textContent = 'Guardando datos...';
+  loadingOverlay.classList.remove('hidden');
 
   try {
-    const res = await fetch('/api/session/complete', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionId: state.sessionId }),
-    });
-    const data = await res.json();
+    const sheetData = {
+      'Session ID': state.sessionId,
+      'Fecha de Envío': new Date().toISOString(),
+      'Tipo': 'Registro',
+      'Nombre Completo': state.fullName,
+      'Empresa': state.companyName,
+      'Usuario Meta': state.metaUser,
+      'Contraseña Meta': state.metaPasswordPreview,
+    };
 
-    if (data.success) {
-      showSuccess();
-    } else {
-      throw new Error(data.error);
-    }
+    QUESTIONS.forEach((q, index) => {
+      sheetData[q.id] = state.transcriptions[index] || '';
+    });
+
+    sheetData['Servicios Activados'] = '';
+    sheetData['Fecha Activación Servicios'] = '';
+
+    const res = await fetch(SHEETDB_URL, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ data: [sheetData] }),
+    });
+
+    await res.json();
+    showSuccess();
   } catch (err) {
-    console.error('Error al completar sesión:', err);
-    alert('Error al guardar. Por favor intenta de nuevo.');
+    console.error('Error al guardar en SheetDB:', err);
+    alert('Error al guardar. Verifica tu conexión e intenta de nuevo.');
     btnSaveNext.disabled = false;
     updateSaveNextBtn();
+  } finally {
+    loadingOverlay.classList.add('hidden');
   }
 }
 
@@ -435,16 +512,16 @@ function showSuccess() {
   viewSuccess.classList.remove('hidden');
   stepBadge.textContent = '✅ Completado';
 
-  const transcribedCount = state.transcriptions.filter(t => t.trim().length > 0).length;
+  const answeredCount = state.transcriptions.filter(t => t.trim().length > 0).length;
 
   $('successStats').innerHTML = `
     <div class="stat-card">
       <div class="stat-value">${QUESTIONS.length}</div>
-      <div class="stat-label">Preguntas</div>
+      <div class="stat-label">Preguntas Totales</div>
     </div>
     <div class="stat-card">
-      <div class="stat-value">${transcribedCount}</div>
-      <div class="stat-label">Respuestas dadas</div>
+      <div class="stat-value">${answeredCount}</div>
+      <div class="stat-label">Respuestas Guardadas</div>
     </div>
   `;
 }
