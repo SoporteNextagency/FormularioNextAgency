@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <title>Admin - NextAgency</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="preload"
+    href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Syncopate:wght@400;700&display=swap"
+    as="style" onload="this.onload=null;this.rel='stylesheet'" />
+  <noscript>
+    <link rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Syncopate:wght@400;700&display=swap" />
+  </noscript>
+  <link rel="stylesheet" href="styles.css?v=4.1">
+  <style>
+    body {
+      padding: 2rem;
+      background: #ffffff !important;
+      display: block !important;
+    }
+
+    .admin-container {
+      max-width: 1300px;
+      margin: 0 auto;
+    }
+
+    #dashHeader {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 2rem;
+    }
+
+    @media (max-width: 560px) {
+      body {
+        padding: 1rem 0.5rem;
+      }
+
+      .admin-container {
+        max-width: 100%;
+      }
+    }
+
+    .login-box {
+      max-width: 400px;
+      margin: 100px auto;
+    }
+
+    /* ── Tabla ── */
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1rem;
+      color: var(--clr-text-1);
+      font-size: 0.9rem;
+    }
+
+    .data-table th,
+    .data-table td {
+      padding: 0.85rem 1rem;
+      text-align: left;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      vertical-align: middle;
+    }
+
+    .data-table th {
+      background: rgba(255, 255, 255, 0.04);
+      font-weight: 600;
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--clr-text-2);
+    }
+
+    .data-table tr:hover td {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 0.2rem 0.6rem;
+      border-radius: 1rem;
+      font-size: 0.72rem;
+      font-weight: 700;
+    }
+
+    .badge.active {
+      background: rgba(132, 204, 22, 0.18);
+      color: #84cc16;
+    }
+
+    .badge.trial {
+      background: rgba(99, 179, 237, 0.18);
+      color: #63b3ed;
+    }
+
+    .badge.pending {
+      background: rgba(234, 179, 8, 0.18);
+      color: #eab308;
+    }
+
+    .badge.overdue {
+      background: rgba(239, 68, 68, 0.18);
+      color: #ef4444;
+    }
+
+    .billing-info {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .billing-label {
+      font-size: 0.7rem;
+      color: var(--clr-text-3);
+    }
+
+    .billing-value {
+      font-size: 0.88rem;
+      font-weight: 500;
+    }
+
+    .billing-value.highlight {
+      color: #a78bfa;
+    }
+
+    .billing-value.danger {
+      color: #f87171;
+    }
+
+    .billing-value.ok {
+      color: #84cc16;
+    }
+
+    /* ── Modal / overlay ── */
+    .modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.85);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+
+    .modal.hidden {
+      display: none;
+    }
+
+    .modal-content {
+      background: var(--clr-bg-1);
+      padding: 2rem;
+      border-radius: 1rem;
+      width: 100%;
+      max-width: 520px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .modal-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+
+    .info-chip {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 0.5rem;
+      padding: 0.75rem;
+      margin-top: 1rem;
+      font-size: 0.82rem;
+      color: var(--clr-text-2);
+      display: flex;
+      gap: 0.5rem;
+      align-items: flex-start;
+    }
+
+    .info-chip svg {
+      flex-shrink: 0;
+      margin-top: 1px;
+      opacity: 0.7;
+    }
+
+    /* ── Panel de Detalle (slide desde la derecha) ── */
+    #clientDetail {
+      position: fixed;
+      top: 0;
+      right: 0;
+      width: min(680px, 100vw);
+      height: 100vh;
+      background: var(--clr-surface, #fff);
+      box-shadow: -8px 0 40px rgba(0, 0, 0, 0.35);
+      z-index: 900;
+      display: flex;
+      flex-direction: column;
+      transform: translateX(100%);
+      transition: transform 0.35s cubic-bezier(.4, 0, .2, 1);
+      overflow: hidden;
+    }
+
+    #clientDetail.open {
+      transform: translateX(0);
+    }
+
+    #detailOverlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 850;
+      display: none;
+      cursor: pointer;
+    }
+
+    #detailOverlay.open {
+      display: block;
+    }
+
+    /* Cabecera del panel */
+    .detail-header {
+      padding: 1.5rem 1.75rem 0;
+      border-bottom: 1px solid var(--clr-border, rgba(0, 0, 0, 0.1));
+      background: var(--clr-surface, #fff);
+      flex-shrink: 0;
+    }
+
+    .detail-header-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    #detailClientTitle {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: var(--clr-text-1);
+      margin: 0;
+    }
+
+    #detailClientSub {
+      font-size: 0.82rem;
+      color: var(--clr-text-2);
+      margin-top: 2px;
+    }
+
+    #detailBadge {
+      margin-top: 6px;
+    }
+
+    .detail-close-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 4px;
+      color: var(--clr-text-2);
+      flex-shrink: 0;
+      border-radius: 6px;
+      transition: background 0.15s, color 0.15s;
+    }
+
+    .detail-close-btn:hover {
+      background: rgba(0, 0, 0, 0.06);
+      color: var(--clr-text-1);
+    }
+
+    /* Pestañas */
+    .tab-list {
+      display: flex;
+      gap: 0;
+      margin: 0 -1.75rem;
+      padding: 0 1.75rem;
+    }
+
+    .tab-btn {
+      padding: 0.65rem 1.1rem;
+      font-size: 0.82rem;
+      font-weight: 600;
+      border: none;
+      background: none;
+      cursor: pointer;
+      color: var(--clr-text-2);
+      border-bottom: 3px solid transparent;
+      transition: color 0.15s, border-color 0.15s;
+      white-space: nowrap;
+    }
+
+    .tab-btn.active {
+      color: var(--clr-primary, #00a3dd);
+      border-bottom-color: var(--clr-primary, #00a3dd);
+    }
+
+    .tab-btn:hover:not(.active) {
+      color: var(--clr-text-1);
+    }
+
+    /* Contenido de pestañas */
+    .detail-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1.75rem;
+    }
+
+    .tab-panel {
+      display: none;
+    }
+
+    .tab-panel.active {
+      display: block;
+    }
+
+    /* Preguntas: card por pregunta */
+    .qa-card {
+      border: 1px solid var(--clr-border, rgba(0, 0, 0, 0.1));
+      border-radius: 0.75rem;
+      padding: 1rem 1.1rem;
+      margin-bottom: 1rem;
+      background: var(--clr-surface-2, #f8fafc);
+    }
+
+    .qa-label {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--clr-primary, #00a3dd);
+      margin-bottom: 0.4rem;
+    }
+
+    .qa-textarea {
+      width: 100%;
+      box-sizing: border-box;
+      border: 1px solid var(--clr-border, rgba(0, 0, 0, 0.12));
+      border-radius: 0.5rem;
+      padding: 0.6rem 0.8rem;
+      font-size: 0.85rem;
+      font-family: inherit;
+      color: var(--clr-text-1);
+      background: var(--clr-surface, #fff);
+      resize: vertical;
+      min-height: 70px;
+      transition: border-color 0.2s;
+      outline: none;
+    }
+
+    .qa-textarea:focus {
+      border-color: var(--clr-primary, #00a3dd);
+    }
+
+    /* Sección servicios dentro del panel */
+    .service-section {
+      margin-bottom: 1.5rem;
+    }
+
+    .section-title {
+      font-size: 0.8rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--clr-text-2);
+      margin-bottom: 0.75rem;
+    }
+
+    /* Prompt textarea grande */
+    .prompt-ta {
+      width: 100%;
+      box-sizing: border-box;
+      height: calc(100vh - 360px);
+      min-height: 200px;
+      border: 1px solid var(--clr-border, rgba(0, 0, 0, 0.12));
+      border-radius: 0.75rem;
+      padding: 1rem;
+      font-family: monospace;
+      font-size: 0.82rem;
+      line-height: 1.6;
+      color: var(--clr-text-1);
+      background: var(--clr-surface-2, #f8fafc);
+      resize: none;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .prompt-ta:focus {
+      border-color: var(--clr-primary, #00a3dd);
+    }
+
+    /* Meta info chip */
+    .meta-chip {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      background: var(--clr-surface-2, #f8fafc);
+      border: 1px solid var(--clr-border, rgba(0, 0, 0, 0.1));
+      border-radius: 0.5rem;
+      padding: 0.6rem 0.9rem;
+      font-size: 0.83rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .meta-chip strong {
+      color: var(--clr-text-2);
+      min-width: 110px;
+    }
+
+    .meta-chip span {
+      color: var(--clr-text-1);
+      font-weight: 500;
+      word-break: break-all;
+    }
+
+    /* Sticky footer del panel */
+    .detail-footer {
+      padding: 1rem 1.75rem;
+      border-top: 1px solid var(--clr-border, rgba(0, 0, 0, 0.1));
+      background: var(--clr-surface, #fff);
+      flex-shrink: 0;
+      display: flex;
+      gap: 0.75rem;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="bg-orbs">
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+  </div>
+
+  <!-- Overlay del panel de detalle -->
+  <div id="detailOverlay" onclick="closeClientDetail()"></div>
+
+  <!-- ═══════════════════════════════════════════════ -->
+  <!-- EDITOR GLOBAL DE PREGUNTAS (pantalla completa) -->
+  <!-- ═══════════════════════════════════════════════ -->
+  <div id="questionsEditorOverlay" style="
+    position:fixed; inset:0;
+    background:var(--clr-bg-1, #f4f6fb);
+    z-index: 1100;
+    display:none;
+    flex-direction:column;
+    overflow:hidden;
+  ">
+    <!-- Header del editor -->
+    <div style="
+      display:flex; align-items:center; justify-content:space-between;
+      padding: 1.25rem 2rem;
+      border-bottom: 1px solid var(--clr-border, rgba(0,0,0,0.1));
+      background: var(--clr-surface, #fff);
+      flex-shrink:0;
+    ">
+      <div>
+        <h2 style="margin:0; color:var(--clr-text-1); font-size:1.2rem;">✏️ Editar Plantilla de Preguntas</h2>
+        <p style="margin:4px 0 0; color:var(--clr-text-2); font-size:0.82rem;">Estos son los textos que verán los
+          clientes al llenar el formulario. Edítalos y haz clic en <strong>Guardar cambios</strong>.</p>
+      </div>
+      <div style="display:flex;gap:0.75rem;">
+        <button class="btn-secondary" onclick="closeQuestionsEditor()">Cancelar</button>
+        <button class="btn-primary" onclick="saveQuestionsTemplate()" style="margin-top:0;">
+          <span id="btnSaveQuestionsText">Guardar cambios</span>
+        </button>
+      </div>
+    </div>
+    <!-- Lista de preguntas editables -->
+    <div id="questionsEditorList" style="
+      flex:1; overflow-y:auto;
+      padding: 1.5rem 2rem;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+      gap: 1rem;
+      align-content: start;
+    "></div>
+  </div>
+
+  <div class="admin-container">
+
+    <!-- Enlace de regreso -->
+    <div style="max-width: 400px; margin: 0 auto; padding-top: 2rem;">
+      <a href="https://formularionextagency.web.app" style="
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        color: var(--clr-text-2);
+        text-decoration: none;
+        font-size: 0.85rem;
+        font-weight: 500;
+        transition: color 0.2s;
+      " onmouseover="this.style.color='var(--clr-primary)'" onmouseout="this.style.color='var(--clr-text-2)'">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round">
+          <path d="M19 12H5M12 19l-7-7 7-7" />
+        </svg>
+        Back
+      </a>
+    </div>
+
+
+
+    <!-- LOGIN -->
+    <main class="card login-box" id="adminLogin">
+      <div class="card-glow"></div>
+      <h1 class="card-title">Acceso Admin</h1>
+      <p class="card-subtitle" style="margin-bottom:2rem;">Solo personal autorizado.</p>
+      <div class="field-group">
+        <label class="field-label">Correo electrónico</label>
+        <input type="email" id="adminEmail" class="field-input" placeholder="ejemplo@nextagency.app">
+      </div>
+      <button class="btn-primary" id="btnLogin" style="margin-top: 1rem; width: 100%;">
+        <span>Ingresar</span>
+      </button>
+    </main>
+
+    <!-- DASHBOARD -->
+    <div id="adminDashboard" class="hidden">
+      <header id="dashHeader">
+        <div>
+          <h1 style="color:var(--clr-text-1); font-size: 1.5rem;">Panel de Clientes Registrados</h1>
+          <p style="color:var(--clr-text-2);">Gestiona los servicios y fechas de facturación</p>
+        </div>
+        <div style="display:flex; gap:0.75rem; align-items:center;">
+          <button class="btn-secondary" onclick="openGoogleSheets()"
+            style="display:flex;align-items:center;gap:0.4rem;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+              stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="16" y1="13" x2="8" y2="13"></line>
+              <line x1="16" y1="17" x2="8" y2="17"></line>
+              <polyline points="10 9 9 9 8 9"></polyline>
+            </svg>
+
+          </button>
+          <button class="btn-secondary" id="btnEditQuestions" onclick="openQuestionsEditor()"
+            style="display:flex;align-items:center;gap:0.4rem;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+              stroke-linecap="round" stroke-linejoin="round">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+            </svg>
+            Editar Preguntas
+          </button>
+          <button class="btn-secondary" onclick="location.reload()">Cerrar sesión</button>
+        </div>
+      </header>
+
+      <div class="dash-tabs"
+        style="display:flex; gap:1rem; margin-bottom:1rem; border-bottom: 1px solid var(--clr-border, rgba(0,0,0,0.1)); padding: 0 1rem;">
+        <button class="dash-tab-btn active" onclick="switchDashTab('registros')" id="dtb-registros"
+          style="padding:0.75rem 0.5rem; border:none; background:none; font-weight:600; font-size:0.95rem; cursor:pointer; color:var(--clr-primary); border-bottom:3px solid var(--clr-primary); transition:all 0.2s;">Clientes
+          Registrados</button>
+        <button class="dash-tab-btn" onclick="switchDashTab('consultas')" id="dtb-consultas"
+          style="padding:0.75rem 0.5rem; border:none; background:none; font-weight:600; font-size:0.95rem; cursor:pointer; color:var(--clr-text-2); border-bottom:3px solid transparent; transition:all 0.2s;">Consultas</button>
+      </div>
+
+      <div class="card dash-panel" id="dpanel-registros" style="padding: 1rem; overflow-x: auto;">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Fecha Registro</th>
+              <th>Empresa / Cliente</th>
+              <th>Servicio</th>
+              <th>Estado</th>
+              <th>Próx. Facturación</th>
+              <th style="width: 80px; text-align:center;">Detalle</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody">
+            <tr>
+              <td colspan="6" style="text-align:center; padding: 2rem; color: var(--clr-text-3);">Cargando clientes...
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card dash-panel" id="dpanel-consultas" style="padding: 1rem; overflow-x: auto; display:none;">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Fecha Consulta</th>
+              <th>Empresa / Cliente</th>
+              <th>Consulta</th>
+              <th style="width: 250px;">Notas internas</th>
+              <th style="width: 140px; text-align:center;">Especialista</th>
+              <th style="width: 140px; text-align:center;">Respuesta</th>
+            </tr>
+          </thead>
+          <tbody id="tableBodyConsultas">
+            <tr>
+              <td colspan="6" style="text-align:center; padding: 2rem; color: var(--clr-text-3);">Cargando consultas...
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ═══════════════════════════════════════════════ -->
+  <!-- PANEL DE DETALLE DEL CLIENTE (slide derecha)   -->
+  <!-- ═══════════════════════════════════════════════ -->
+  <aside id="clientDetail">
+
+    <!-- Cabecera -->
+    <div class="detail-header">
+      <div class="detail-header-top">
+        <div>
+          <h2 id="detailClientTitle">—</h2>
+          <div id="detailClientSub"></div>
+          <div id="detailBadge" style="margin-top:6px;"></div>
+        </div>
+        <button class="detail-close-btn" onclick="closeClientDetail()" title="Cerrar">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+            stroke-linecap="round">
+            <path d="M18 6L6 18M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
+      <!-- Pestañas -->
+      <div class="tab-list" role="tablist">
+        <button class="tab-btn active" onclick="switchTab('servicios')" id="tab-servicios">⚙️ Servicios</button>
+        <button class="tab-btn" onclick="switchTab('preguntas')" id="tab-preguntas">📋 Preguntas</button>
+        <button class="tab-btn" onclick="switchTab('prompt')" id="tab-prompt">🤖 Prompt</button>
+      </div>
+    </div>
+
+    <!-- Cuerpo con tabs -->
+    <div class="detail-body">
+
+      <!-- ─── TAB: SERVICIOS ─── -->
+      <div class="tab-panel active" id="panel-servicios">
+
+        <div class="service-section">
+          <div class="section-title">Datos Meta</div>
+          <div class="meta-chip"><strong>Usuario</strong><span id="d-metaUser">—</span></div>
+          <div class="meta-chip" id="d-metaPassWrap" style="display:none;">
+            <strong>Contraseña</strong>
+            <span id="d-metaPassDisplay">••••••</span>
+            <button onclick="revealDetailPassword()"
+              style="margin-left:auto; font-size:0.75rem; background:none; border:none; color:var(--clr-primary); cursor:pointer; font-weight:600;">Ver</button>
+          </div>
+        </div>
+
+        <div class="service-section">
+          <div class="section-title">Servicios Contratados</div>
+          <div class="field-group" style="margin-bottom: 0.75rem;">
+            <div style="display:flex; gap:0.5rem; align-items:center;">
+              <select id="d-servicesSelect" class="field-input" style="flex:1;">
+                <option value="">-- Añadir servicio --</option>
+              </select>
+              <button type="button" class="btn-secondary" onclick="addServiceFromSelect()"
+                style="padding:0.6rem 1rem;">Añadir</button>
+            </div>
+
+            <!-- Lista dinámica de servicios -->
+            <div id="d-servicesList" style="display:flex; flex-direction:column; gap:0.5rem; margin-top:1rem;">
+              <!-- Los servicios se renderizarán aquí -->
+            </div>
+          </div>
+          <div class="modal-grid" style="display:none;">
+            <div class="field-group">
+              <label class="field-label">Fecha de Activación</label>
+              <input type="date" id="d-editDate" class="field-input">
+            </div>
+          </div>
+          <div class="info-chip" id="d-billingPreview" style="display:none;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="12" />
+              <line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+            <div id="d-billingPreviewText"></div>
+          </div>
+        </div>
+
+        <div class="service-section">
+          <div class="section-title">Estado de Suscripción</div>
+          <div id="d-billingStatus" style="display:flex; flex-direction:column; gap:0.5rem;">
+            <div class="meta-chip"><strong>Prueba gratis hasta</strong><span id="d-trialEnd">—</span></div>
+            <div class="meta-chip"><strong>Próxima facturación</strong><span id="d-nextBill">—</span></div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ─── TAB: PREGUNTAS ─── -->
+      <div class="tab-panel" id="panel-preguntas">
+        <p style="font-size:0.82rem; color:var(--clr-text-2); margin-bottom:1.25rem;">
+          Edita las respuestas del cliente y haz clic en <strong>Guardar preguntas</strong> para actualizar en Google
+          Sheets.
+        </p>
+        <div id="questionsContainer"></div>
+      </div>
+
+      <!-- ─── TAB: PROMPT ─── -->
+      <div class="tab-panel" id="panel-prompt">
+        <p style="font-size:0.82rem; color:var(--clr-text-2); margin-bottom:1rem;">
+          Prompt generado con todas las respuestas del cliente. Edítalo si necesitas ajustes antes de usarlo.
+        </p>
+        <textarea id="d-promptTextarea" class="prompt-ta"></textarea>
+      </div>
+
+    </div>
+
+    <!-- Footer dinámico -->
+    <div class="detail-footer" id="detailFooter">
+      <!-- Se llena por JS según la pestaña activa -->
+    </div>
+
+  </aside>
+
+  <!-- MODAL DE EDICIÓN (legacy, oculto – se usa el panel ahora) -->
+  <input type="hidden" id="editSessionId">
+  <input type="hidden" id="editServicesSelect">
+  <input type="hidden" id="editServicesInput">
+  <input type="hidden" id="editDate">
+  <input type="hidden" id="editPrice">
+  <span id="modalClientName" style="display:none;"></span>
+  <div id="billingPreview" style="display:none;"></div>
+  <span id="billingPreviewText" style="display:none;"></span>
+  <button id="btnSaveEdit" style="display:none;"><span></span></button>
+  <button id="btnCancelEdit" style="display:none;"></button>
+
+  <!-- MODAL PROMPT (legacy, oculto) -->
+  <div id="promptModal" class="modal hidden">
+    <div class="modal-content" style="max-width:700px;display:flex;flex-direction:column;height:80vh;">
+      <h2 style="color:var(--clr-text-1);margin-bottom:0.25rem;">Prompt Generado</h2>
+      <p style="color:var(--clr-text-2);font-size:0.85rem;margin-bottom:1rem;" id="promptClientName"></p>
+      <textarea id="promptTextarea" class="field-input"
+        style="flex:1;resize:none;margin-bottom:1rem;font-family:monospace;font-size:0.85rem;line-height:1.5;padding:1rem;"></textarea>
+      <div style="display:flex;gap:1rem;">
+        <button class="btn-secondary" id="btnCancelPrompt" style="flex:1;">Cerrar</button>
+        <button class="btn-primary" id="btnCopyPrompt" style="flex:1;margin-top:0;"><span id="btnCopyPromptText">Copiar
+            al portapapeles</span></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL DE ACTUALIZAR DATOS DEL CLIENTE -->
+  <div class="modal hidden" id="updateModal">
+    <div class="modal-content" style="max-width: 480px;">
+      <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:1.25rem;">
+        <div
+          style="width:42px;height:42px;border-radius:50%;background:rgba(0,163,221,0.12);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--clr-primary)" stroke-width="2.5"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+          </svg>
+        </div>
+        <div>
+          <h3 style="margin:0;color:var(--clr-text-1);font-size:1rem;">Actualizar datos del cliente</h3>
+          <p style="margin:2px 0 0;color:var(--clr-text-2);font-size:0.82rem;" id="updateClientLabel"></p>
+        </div>
+      </div>
+      <input type="hidden" id="updateSessionId">
+      <div class="field-group" style="margin-bottom:0.9rem;">
+        <label class="field-label">Nombre Completo</label>
+        <input type="text" id="updateFullName" class="field-input" placeholder="Ej. María García López">
+      </div>
+      <div class="field-group" style="margin-bottom:0.9rem;">
+        <label class="field-label">Nombre de la Empresa</label>
+        <input type="text" id="updateCompany" class="field-input" placeholder="Ej. Acme Corp S.A.">
+      </div>
+      <div class="field-group" style="margin-bottom:0.9rem;">
+        <label class="field-label">Usuario de Meta</label>
+        <input type="text" id="updateMetaUser" class="field-input" placeholder="@tu_usuario">
+      </div>
+      <div class="field-group" style="margin-bottom:0.9rem;">
+        <label class="field-label">Contraseña de Meta</label>
+        <input type="text" id="updateMetaPass" class="field-input" placeholder="Tu contraseña">
+      </div>
+      <div style="display:flex;gap:0.75rem;margin-top:1.5rem;">
+        <button class="btn-secondary" id="btnCancelUpdate" style="flex:1;">Cancelar</button>
+        <button class="btn-primary" id="btnConfirmUpdate" style="flex:1;margin-top:0;">
+          <span id="btnConfirmUpdateText">Guardar cambios</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL DE CONFIRMACIÓN DE ELIMINACIÓN -->
+  <div class="modal hidden" id="deleteModal">
+    <div class="modal-content" style="max-width: 440px;">
+      <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:1rem;">
+        <div
+          style="width:42px;height:42px;border-radius:50%;background:rgba(239,68,68,0.12);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2.5"
+            stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="3 6 5 6 21 6" />
+            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+            <path d="M10 11v6M14 11v6" />
+            <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+          </svg>
+        </div>
+        <div>
+          <h3 style="margin:0;color:var(--clr-text-1);font-size:1rem;">Eliminar cliente</h3>
+          <p style="margin:2px 0 0;color:var(--clr-text-2);font-size:0.82rem;" id="deleteClientLabel"></p>
+        </div>
+      </div>
+      <p style="color:var(--clr-text-2);font-size:0.85rem;margin-bottom:1.25rem;line-height:1.5;">
+        Esta acción es <strong style="color:#ef4444;">irreversible</strong>. Se eliminarán todos los datos del cliente
+        del sistema.
+        Para confirmar, escribe <strong>Eliminar</strong> en el campo de abajo:
+      </p>
+      <div class="field-group">
+        <input type="text" id="deleteConfirmInput" class="field-input" placeholder="Escribe: Eliminar">
+      </div>
+      <p id="deleteConfirmError" style="color:#ef4444;font-size:0.78rem;margin-top:0.4rem;display:none;">⚠️ Debes
+        escribir exactamente "Eliminar" para continuar.</p>
+      <input type="hidden" id="deleteSessionId">
+      <div style="display:flex;gap:0.75rem;margin-top:1.5rem;">
+        <button class="btn-secondary" id="btnCancelDelete" style="flex:1;">Cancelar</button>
+        <button id="btnConfirmDelete" style="
+          flex:1; padding:0.75rem; border-radius:0.75rem; border:none;
+          background:#ef4444; color:#fff; font-weight:700; cursor:pointer;
+          font-size:0.9rem; transition:opacity 0.2s;
+        ">
+          <span id="btnConfirmDeleteText">Eliminar cliente</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script src="admin.js?v=5.7" defer></script>
+</body>
+
+</html>
