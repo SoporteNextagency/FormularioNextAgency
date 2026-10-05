@@ -37,7 +37,6 @@ const state = {
   metaUser: '',
   metaPasswordPreview: '',
   companyAddress: '',
-  companyRif: '',
   companyPhone: '',
   companyWebsite: '',
   companyLogoData: '',
@@ -80,7 +79,6 @@ const companyForm             = $('companyForm');
 const companyPrefilledName    = $('companyPrefilledName');
 const companyPrefilledEmail   = $('companyPrefilledEmail');
 const companyAddressInput     = $('companyAddress');
-const companyRifInput         = $('companyRif');
 const companyPhoneInput       = $('companyPhone');
 const companyWebsiteInput     = $('companyWebsite');
 const companyLogoFileInput    = $('companyLogoFile');
@@ -379,7 +377,6 @@ if (companyForm) {
     e.preventDefault();
 
     state.companyAddress     = companyAddressInput ? companyAddressInput.value.trim() : '';
-    state.companyRif         = companyRifInput ? companyRifInput.value.trim() : '';
     state.companyPhone       = companyPhoneInput ? companyPhoneInput.value.trim() : '';
     state.companyWebsite     = companyWebsiteInput ? companyWebsiteInput.value.trim() : '';
     state.companySocialMedia = companySocialInput ? companySocialInput.value.trim() : '';
@@ -855,7 +852,6 @@ async function completeSession() {
       'Empresa': state.companyName,
       'Usuario Meta': state.metaUser,
       'Contraseña Meta': state.metaPasswordPreview,
-      'Rif': state.companyRif,
       'Dirección': state.companyAddress,
       'Teléfono': state.companyPhone,
       'Página Web': state.companyWebsite,

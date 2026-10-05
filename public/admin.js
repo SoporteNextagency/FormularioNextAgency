@@ -553,7 +553,6 @@ function updateDetailBillingPreview() {
 function fillEmpresaTab(client) {
   const nameEl = document.getElementById('d-companyName');
   const emailEl = document.getElementById('d-companyEmail');
-  const rifEl = document.getElementById('d-companyRif');
   const addrEl = document.getElementById('d-companyAddress');
   const phoneEl = document.getElementById('d-companyPhone');
   const webEl = document.getElementById('d-companyWebsite');
@@ -565,7 +564,6 @@ function fillEmpresaTab(client) {
 
   if (nameEl) nameEl.textContent = client['Empresa'] || client['Nombre de la empresa'] || '—';
   if (emailEl) emailEl.textContent = client['Usuario Meta'] || client['Correo'] || client['Email'] || '—';
-  if (rifEl) rifEl.textContent = client['Rif'] || client['RIF'] || '—';
   if (addrEl) addrEl.textContent = client['Dirección'] || client['Direccion'] || '—';
   if (phoneEl) phoneEl.textContent = client['Teléfono'] || client['Telefono'] || '—';
 
