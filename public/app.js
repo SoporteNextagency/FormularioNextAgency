@@ -3,7 +3,6 @@
 // =============================================
 
 const SHEETDB_URL = 'https://sheetdb.io/api/v1/tpz4wdwvpet8d';
-const CASES_URL   = 'https://sheetdb.io/api/v1/6sty8p65pjvjk?sheet=casos';
 
 // ─── Preguntas del cuestionario (por defecto) ────────────────
 const QUESTIONS_DEFAULT = [
@@ -37,29 +36,79 @@ const state = {
   companyName: '',
   metaUser: '',
   metaPasswordPreview: '',
+  companyAddress: '',
+  companyPhone: '',
+  companyWebsite: '',
+  companyLogoData: '',
+  companyLogoName: '',
+  companyBrandData: '',
+  companyBrandName: '',
+  companySocialMedia: '',
+  companyNotes: '',
+  companyServiceType: '',
   currentQuestion: 0,
   transcriptions: new Array(QUESTIONS_DEFAULT.length).fill(''),
   recognition: null,
   isRecording: false,
+  isPaused: false,
   questionsReady: false,
 };
 
 // ─── Elementos del DOM ────────────────────────
 const $ = (id) => document.getElementById(id);
 
-const viewForm   = $('viewForm');
-const viewQuiz   = $('viewQuiz');
-const viewSuccess= $('viewSuccess');
-const stepBadge  = $('stepBadge');
+const viewForm    = $('viewForm');
+const viewCompany = $('viewCompany');
+const viewQuiz    = $('viewQuiz');
+const viewSuccess = $('viewSuccess');
+// stepBadge es opcional, se usa un proxy seguro para no romper el quiz
+const stepBadge   = $('stepBadge') || { textContent: '' };
 
-// Formulario
+// Formulario 1: Credenciales
 const initialForm   = $('initialForm');
 const fullNameInput = $('fullName');
 const companyInput  = $('companyName');
 const metaUserInput = $('metaUser');
 const metaPwInput   = $('metaPassword');
+const metaPwConfirmInput = $('metaPasswordConfirm');
 const eyeBtn        = $('eyeBtn');
 const eyeIcon       = $('eyeIcon');
+
+// Formulario 2: Datos de la Empresa
+const companyForm             = $('companyForm');
+const companyPrefilledName    = $('companyPrefilledName');
+const companyPrefilledEmail   = $('companyPrefilledEmail');
+const companyAddressInput     = $('companyAddress');
+const companyPhoneInput       = $('companyPhone');
+const companyWebsiteInput     = $('companyWebsite');
+const companyLogoFileInput    = $('companyLogoFile');
+const logoDropzone            = $('logoDropzone');
+const logoDropzoneContent     = $('logoDropzoneContent');
+const logoPreviewCard         = $('logoPreviewCard');
+const logoPreviewImg          = $('logoPreviewImg');
+const logoFileName            = $('logoFileName');
+const logoFileSize            = $('logoFileSize');
+const btnRemoveLogo           = $('btnRemoveLogo');
+const companyLogoUrlInput     = $('companyLogoUrl');
+const toggleLogoAltBtn        = $('toggleLogoAltBtn');
+const logoAltBox              = $('logoAltBox');
+
+const companyBrandFileInput   = $('companyBrandFile');
+const brandDropzone           = $('brandDropzone');
+const brandDropzoneContent    = $('brandDropzoneContent');
+const brandPreviewCard        = $('brandPreviewCard');
+const brandFileName           = $('brandFileName');
+const brandFileSize           = $('brandFileSize');
+const btnRemoveBrand          = $('btnRemoveBrand');
+const companyBrandUrlInput    = $('companyBrandUrl');
+const toggleBrandAltBtn       = $('toggleBrandAltBtn');
+const brandAltBox             = $('brandAltBox');
+
+const companySocialInput      = $('companySocial');
+const companyNotesInput       = $('companyNotes');
+const companyServiceTypeInput = $('companyServiceType');
+const btnPrevCompany          = $('btnPrevCompany');
+const btnNextCompany          = $('btnNextCompany');
 
 // Quiz
 const progressFill    = $('progressFill');
@@ -118,15 +167,29 @@ if (SpeechRecognition) {
   };
 
   state.recognition.onend = () => {
-    if (state.isRecording) {
+    if (state.isRecording && !state.isPaused) {
       try { state.recognition.start(); } catch (e) {}
     }
   };
 }
 
 // ═══════════════════════════════════════════
-// 0. CARGAR PREGUNTAS DESDE SHEETS (si el admin las editó)
+// 0. CARGAR PREGUNTAS DESDE SHEETS (con cache en localStorage)
 // ═══════════════════════════════════════════
+const QUESTIONS_CACHE_KEY = 'na_questions_cache';
+
+// Aplicar cache inmediatamente si existe (carga instantánea en visitas repetidas)
+try {
+  const cached = localStorage.getItem(QUESTIONS_CACHE_KEY);
+  if (cached) {
+    const parsed = JSON.parse(cached);
+    if (Array.isArray(parsed) && parsed.length) {
+      QUESTIONS = parsed;
+      state.transcriptions = new Array(QUESTIONS.length).fill('');
+    }
+  }
+} catch(e) {}
+
 async function loadQuestionsFromSheets() {
   try {
     const res  = await fetch(`${SHEETDB_URL}/search?Session ID=__QUESTIONS_CONFIG__`);
@@ -136,80 +199,97 @@ async function loadQuestionsFromSheets() {
       if (Array.isArray(loaded) && loaded.length) {
         QUESTIONS = loaded;
         state.transcriptions = new Array(QUESTIONS.length).fill('');
+        // Guardar en caché para la próxima visita
+        try { localStorage.setItem(QUESTIONS_CACHE_KEY, JSON.stringify(loaded)); } catch(e) {}
       }
     }
   } catch(e) {
-    // Si falla la carga, usamos los defaults (ya asignados)
     console.warn('No se pudo cargar la plantilla de preguntas, usando defaults.');
   }
 }
 
-// Cargar preguntas al iniciar la página — diferido para no bloquear el render inicial
-// Usamos setTimeout(0) para que la página se pinte primero y el fetch ocurra después
+// Cargar en background sin bloquear el render
 setTimeout(() => loadQuestionsFromSheets(), 0);
 
 // ═══════════════════════════════════════════
-// 2. FORMULARIO INICIAL Y ACORDEONES
+// BOTÓN SALIR (X) DEL QUIZ
 // ═══════════════════════════════════════════
+const exitModal      = document.getElementById('exitConfirmModal');
+const btnExitQuiz    = document.getElementById('btnExitQuiz');
+const exitCancelBtn  = document.getElementById('exitCancelBtn');
+const exitConfirmBtn = document.getElementById('exitConfirmBtn');
 
-window.toggleAccordion = (id) => {
-  const allAccs = ['registro', 'consulta'];
-  
-  allAccs.forEach(acc => {
-    const el = document.getElementById(`acc-${acc}`);
-    const content = document.getElementById(`content-${acc}`);
-    if (acc === id) {
-      const isOpen = el.classList.contains('open');
-      if (isOpen) {
-        el.classList.remove('open');
-        content.style.display = 'none';
-      } else {
-        el.classList.add('open');
-        content.style.display = 'block';
-      }
-    } else {
-      el.classList.remove('open');
-      content.style.display = 'none';
+if (btnExitQuiz) {
+  btnExitQuiz.addEventListener('click', () => {
+    exitModal.style.display = 'flex';
+  });
+}
+
+if (exitCancelBtn) {
+  exitCancelBtn.addEventListener('click', () => {
+    exitModal.style.display = 'none';
+  });
+}
+
+if (exitConfirmBtn) {
+  exitConfirmBtn.addEventListener('click', () => {
+    // Detener grabación si está activa
+    if (state.isRecording) stopRecording();
+
+    // Resetear estado del quiz
+    state.currentQuestion = 0;
+    state.transcriptions = new Array(QUESTIONS.length).fill('');
+    state.baseTranscript  = '';
+    if (answerTextarea) answerTextarea.value = '';
+
+    // Ocultar modal
+    exitModal.style.display = 'none';
+
+    // Regresar a Portal de Clientes
+    viewQuiz.classList.add('hidden');
+    viewCompany.classList.add('hidden');
+    viewForm.classList.remove('hidden');
+    if (stepBadge && stepBadge.textContent !== undefined) {
+      stepBadge.textContent = 'Paso 1 de 3';
     }
   });
-};
+}
 
-
-eyeBtn.addEventListener('click', () => {
-  const isPassword = metaPwInput.type === 'password';
-  metaPwInput.type = isPassword ? 'text' : 'password';
-  eyeIcon.innerHTML = isPassword
-    ? `<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>`
-    : `<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>`;
-});
-
-metaPwInput.addEventListener('input', () => {
-  const val  = metaPwInput.value;
-  const bars = [$('sb1'), $('sb2'), $('sb3'), $('sb4')];
-  const label = $('strengthLabel');
-
-  let score = 0;
-  if (val.length >= 8)              score++;
-  if (/[A-Z]/.test(val))            score++;
-  if (/[0-9]/.test(val))            score++;
-  if (/[^A-Za-z0-9]/.test(val))     score++;
-
-  const configs = [
-    { color: '',          text: 'Ingresa una contraseña', labelColor: 'var(--clr-text-3)' },
-    { color: 'active-1', text: 'Muy débil',               labelColor: 'var(--clr-danger)' },
-    { color: 'active-2', text: 'Débil',                   labelColor: 'var(--clr-warning)' },
-    { color: 'active-3', text: 'Buena',                   labelColor: '#84cc16' },
-    { color: 'active-4', text: 'Muy fuerte 💪',           labelColor: 'var(--clr-success)' },
-  ];
-
-  const cfg = val.length === 0 ? configs[0] : configs[score] || configs[score - 1];
-  bars.forEach((b, i) => {
-    b.className = 'strength-bar';
-    if (val.length > 0 && i < score) b.classList.add(cfg.color);
+// Cerrar modal al hacer clic en el fondo oscuro
+if (exitModal) {
+  exitModal.addEventListener('click', (e) => {
+    if (e.target === exitModal) exitModal.style.display = 'none';
   });
-  label.textContent = cfg.text;
-  label.style.color = cfg.labelColor;
-});
+}
+
+
+// ═══════════════════════════════════════════
+// 2. FORMULARIO INICIAL
+// ═══════════════════════════════════════════
+
+let pwVisible = false;
+if (eyeBtn) {
+  eyeBtn.addEventListener('click', () => {
+    pwVisible = !pwVisible;
+    metaPwInput.type = pwVisible ? 'text' : 'password';
+    eyeIcon.innerHTML = pwVisible
+      ? `<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>`
+      : `<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>`;
+  });
+}
+
+const eyeBtnConfirm = $('eyeBtnConfirm');
+const eyeIconConfirm = $('eyeIconConfirm');
+let pwConfirmVisible = false;
+if (eyeBtnConfirm) {
+  eyeBtnConfirm.addEventListener('click', () => {
+    pwConfirmVisible = !pwConfirmVisible;
+    metaPwConfirmInput.type = pwConfirmVisible ? 'text' : 'password';
+    eyeIconConfirm.innerHTML = pwConfirmVisible
+      ? `<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>`
+      : `<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>`;
+  });
+}
 
 initialForm.addEventListener('submit', (e) => {
   e.preventDefault();
@@ -218,74 +298,9 @@ initialForm.addEventListener('submit', (e) => {
   state.fullName = fullNameInput.value.trim();
   state.companyName = companyInput.value.trim();
   state.metaUser = metaUserInput.value.trim();
-  state.metaPasswordPreview = metaPwInput.value.substring(0, 3) + '***';
+  state.metaPasswordPreview = metaPwInput.value.trim();
 
-  goToQuiz();
-});
-
-const queryForm = document.getElementById('queryForm');
-queryForm.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  
-  const fn = document.getElementById('q-fullName');
-  const cn = document.getElementById('q-companyName');
-  const msg = document.getElementById('q-message');
-  
-  let isValid = true;
-  [fn, cn, msg].forEach(input => {
-    if (!input.value.trim()) {
-      input.classList.add('invalid');
-      document.getElementById(`err-${input.id}`).style.display = 'block';
-      isValid = false;
-    } else {
-      input.classList.remove('invalid');
-      document.getElementById(`err-${input.id}`).style.display = 'none';
-    }
-  });
-  
-  if (!isValid) return;
-  
-  const btnText = document.getElementById('q-btnText');
-  const btnLoader = document.getElementById('q-btnLoader');
-  const btnSubmit = document.getElementById('q-btnSubmit');
-  const successMsg = document.getElementById('q-successMessage');
-  
-  btnText.style.display = 'none';
-  btnLoader.style.display = 'block';
-  btnSubmit.disabled = true;
-  
-  try {
-    // 1. Contar consultas existentes para enumerarlas
-    const res = await fetch(CASES_URL);
-    const data = await res.json();
-    const nextQueryNum = Array.isArray(data) ? data.length + 1 : 1;
-
-    const sheetData = {
-      'Fecha consulta': new Date().toISOString(),
-      'Nombre completo': fn.value.trim(),
-      'Nombre de la empresa': cn.value.trim(),
-      'Tu consulta': msg.value.trim(),
-      'Especialista': '',
-      'NumeroConsulta': nextQueryNum
-    };
-    
-    await fetch(CASES_URL, {
-      method: 'POST',
-      headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-      body: JSON.stringify({ data: [sheetData] }),
-    });
-    
-    queryForm.reset();
-    successMsg.style.display = 'block';
-    setTimeout(() => successMsg.style.display = 'none', 5000);
-  } catch (err) {
-    console.error('Error enviando consulta:', err);
-    alert('Error enviando la consulta. Inténtalo de nuevo.');
-  } finally {
-    btnText.style.display = 'inline';
-    btnLoader.style.display = 'none';
-    btnSubmit.disabled = false;
-  }
+  goToCompanyData();
 });
 
 function validateForm() {
@@ -294,23 +309,245 @@ function validateForm() {
     { id: 'companyName', el: companyInput  },
     { id: 'metaUser',    el: metaUserInput },
     { id: 'metaPassword',el: metaPwInput   },
+    { id: 'metaPasswordConfirm', el: metaPwConfirmInput }
   ];
   let valid = true;
   fields.forEach(({ id, el }) => {
     const fg = $(`fg-${id}`);
     if (!el.value.trim()) {
       fg.classList.add('has-error');
+      // If it's the confirm field, set a default error text when empty
+      if (id === 'metaPasswordConfirm') {
+        $('err-metaPasswordConfirm').textContent = 'Este campo es requerido';
+      }
       valid = false;
     } else {
       fg.classList.remove('has-error');
     }
   });
+
+  // Check if passwords match
+  if (metaPwInput.value.trim() && metaPwConfirmInput.value.trim() && metaPwInput.value !== metaPwConfirmInput.value) {
+    const fg = $('fg-metaPasswordConfirm');
+    fg.classList.add('has-error');
+    $('err-metaPasswordConfirm').textContent = 'Las contraseñas no coinciden';
+    valid = false;
+  }
+
   return valid;
 }
 
-['fullName','companyName','metaUser','metaPassword'].forEach(id => {
+['fullName','companyName','metaUser','metaPassword','metaPasswordConfirm'].forEach(id => {
   $(id).addEventListener('input', () => $(`fg-${id}`).classList.remove('has-error'));
 });
+
+// ═══════════════════════════════════════════
+// 2.1 TRANSICIÓN A DATOS DE LA EMPRESA
+// ═══════════════════════════════════════════
+
+function goToCompanyData() {
+  viewForm.classList.add('hidden');
+  viewQuiz.classList.add('hidden');
+  viewCompany.classList.remove('hidden');
+
+  // Prellenar nombre y correo previos
+  if (companyPrefilledName) companyPrefilledName.value = state.fullName;
+  if (companyPrefilledEmail) companyPrefilledEmail.value = state.metaUser;
+
+  if (stepBadge && stepBadge.textContent !== undefined) {
+    stepBadge.textContent = 'Paso 2 de 3';
+  }
+
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+if (btnPrevCompany) {
+  btnPrevCompany.addEventListener('click', () => {
+    viewCompany.classList.add('hidden');
+    viewForm.classList.remove('hidden');
+    if (stepBadge && stepBadge.textContent !== undefined) {
+      stepBadge.textContent = 'Paso 1 de 3';
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+}
+
+if (companyForm) {
+  companyForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+
+    state.companyAddress     = companyAddressInput ? companyAddressInput.value.trim() : '';
+    state.companyPhone       = companyPhoneInput ? companyPhoneInput.value.trim() : '';
+    state.companyWebsite     = companyWebsiteInput ? companyWebsiteInput.value.trim() : '';
+    state.companySocialMedia = companySocialInput ? companySocialInput.value.trim() : '';
+    state.companyNotes       = companyNotesInput ? companyNotesInput.value.trim() : '';
+    state.companyServiceType = companyServiceTypeInput ? companyServiceTypeInput.value.trim() : '';
+
+    goToQuiz();
+  });
+}
+
+// ─── Archivos adjuntables: Logo e Identidad ───
+function compressImage(file, callback) {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const img = new Image();
+    img.onload = () => {
+      const maxDim = 480;
+      let width = img.width;
+      let height = img.height;
+      if (width > maxDim || height > maxDim) {
+        if (width > height) {
+          height = Math.round((height * maxDim) / width);
+          width = maxDim;
+        } else {
+          width = Math.round((width * maxDim) / height);
+          height = maxDim;
+        }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.70);
+      const approxKb = (dataUrl.length * 0.75 / 1024).toFixed(1) + ' KB';
+      callback(dataUrl, approxKb);
+    };
+    img.onerror = () => {
+      const approxKb = (file.size / 1024).toFixed(1) + ' KB';
+      callback(e.target.result, approxKb);
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+// Logo Dropzone
+if (companyLogoFileInput) {
+  const handleLogoFile = (file) => {
+    if (!file) return;
+    state.companyLogoName = file.name;
+    if (logoFileName) logoFileName.textContent = file.name;
+
+    compressImage(file, (dataUrl, sizeStr) => {
+      state.companyLogoData = dataUrl;
+      if (logoFileSize) logoFileSize.textContent = sizeStr;
+      if (logoPreviewImg) logoPreviewImg.src = dataUrl;
+      if (logoDropzoneContent) logoDropzoneContent.classList.add('hidden');
+      if (logoPreviewCard) logoPreviewCard.classList.remove('hidden');
+    });
+  };
+
+  companyLogoFileInput.addEventListener('change', (e) => {
+    if (e.target.files && e.target.files[0]) {
+      handleLogoFile(e.target.files[0]);
+    }
+  });
+
+  if (logoDropzone) {
+    logoDropzone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      logoDropzone.classList.add('dragover');
+    });
+    ['dragleave', 'dragend'].forEach(ev => {
+      logoDropzone.addEventListener(ev, () => logoDropzone.classList.remove('dragover'));
+    });
+    logoDropzone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      logoDropzone.classList.remove('dragover');
+      if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) {
+        handleLogoFile(e.dataTransfer.files[0]);
+      }
+    });
+  }
+
+  if (btnRemoveLogo) {
+    btnRemoveLogo.addEventListener('click', (e) => {
+      e.stopPropagation();
+      state.companyLogoData = '';
+      state.companyLogoName = '';
+      companyLogoFileInput.value = '';
+      if (logoPreviewImg) logoPreviewImg.src = '';
+      if (logoPreviewCard) logoPreviewCard.classList.add('hidden');
+      if (logoDropzoneContent) logoDropzoneContent.classList.remove('hidden');
+    });
+  }
+}
+
+// Brand Identity Dropzone
+if (companyBrandFileInput) {
+  const handleBrandFile = (file) => {
+    if (!file) return;
+    state.companyBrandName = file.name;
+    if (brandFileName) brandFileName.textContent = file.name;
+    const sizeStr = file.size > 1048576
+      ? (file.size / 1048576).toFixed(1) + ' MB'
+      : (file.size / 1024).toFixed(1) + ' KB';
+    if (brandFileSize) brandFileSize.textContent = sizeStr;
+
+    if (file.type.startsWith('image/')) {
+      compressImage(file, (dataUrl) => {
+        state.companyBrandData = dataUrl;
+      });
+    } else if (file.size <= 32000) {
+      const reader = new FileReader();
+      reader.onload = (e) => { state.companyBrandData = e.target.result; };
+      reader.readAsDataURL(file);
+    } else {
+      state.companyBrandData = `[Archivo adjunto: ${file.name} (${sizeStr})]`;
+    }
+
+    if (brandDropzoneContent) brandDropzoneContent.classList.add('hidden');
+    if (brandPreviewCard) brandPreviewCard.classList.remove('hidden');
+  };
+
+  companyBrandFileInput.addEventListener('change', (e) => {
+    if (e.target.files && e.target.files[0]) {
+      handleBrandFile(e.target.files[0]);
+    }
+  });
+
+  if (brandDropzone) {
+    brandDropzone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      brandDropzone.classList.add('dragover');
+    });
+    ['dragleave', 'dragend'].forEach(ev => {
+      brandDropzone.addEventListener(ev, () => brandDropzone.classList.remove('dragover'));
+    });
+    brandDropzone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      brandDropzone.classList.remove('dragover');
+      if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) {
+        handleBrandFile(e.dataTransfer.files[0]);
+      }
+    });
+  }
+
+  if (btnRemoveBrand) {
+    btnRemoveBrand.addEventListener('click', (e) => {
+      e.stopPropagation();
+      state.companyBrandData = '';
+      state.companyBrandName = '';
+      companyBrandFileInput.value = '';
+      if (brandPreviewCard) brandPreviewCard.classList.add('hidden');
+      if (brandDropzoneContent) brandDropzoneContent.classList.remove('hidden');
+    });
+  }
+}
+
+// Botones para alternar links directos
+if (toggleLogoAltBtn && logoAltBox) {
+  toggleLogoAltBtn.addEventListener('click', () => {
+    logoAltBox.classList.toggle('hidden');
+  });
+}
+if (toggleBrandAltBtn && brandAltBox) {
+  toggleBrandAltBtn.addEventListener('click', () => {
+    brandAltBox.classList.toggle('hidden');
+  });
+}
 
 // ═══════════════════════════════════════════
 // 3. TRANSICIÓN AL QUIZ
@@ -318,8 +555,9 @@ function validateForm() {
 
 function goToQuiz() {
   viewForm.classList.add('hidden');
+  viewCompany.classList.add('hidden');
   viewQuiz.classList.remove('hidden');
-  stepBadge.textContent = 'Paso 2 de 2';
+  if (stepBadge && stepBadge.textContent !== undefined) stepBadge.textContent = 'Paso 3 de 3';
 
   progressDots.innerHTML = '';
   QUESTIONS.forEach((_, i) => {
@@ -379,16 +617,98 @@ function updateSaveNextBtn() {
   btnSaveNext.querySelector('span').textContent = isLast ? 'Finalizar entrevista' : 'Guardar y Continuar';
 }
 
+function updateRecorderUI() {
+  const btnRecordText = $('btnRecordText');
+  const btnRecordInner = $('btnRecordInner');
+  const statusText = $('statusText');
+  const statusPulse = $('statusPulse');
+  const btnReset = $('btnReset');
+
+  if (state.isRecording && !state.isPaused) {
+    // Recording
+    btnRecord.disabled = false;
+    btnRecord.classList.add('recording');
+    if (btnRecordText) btnRecordText.textContent = 'Pausar';
+    if (btnRecordInner) {
+      btnRecordInner.innerHTML = `
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="6" y="4" width="4" height="16" rx="1"></rect>
+          <rect x="14" y="4" width="4" height="16" rx="1"></rect>
+        </svg>
+      `;
+    }
+    btnStop.disabled = false;
+    if (btnReset) btnReset.disabled = false;
+    if (statusText) statusText.textContent = 'Grabando...';
+    if (statusPulse) statusPulse.classList.remove('hidden');
+  } else if (state.isRecording && state.isPaused) {
+    // Paused
+    btnRecord.disabled = false;
+    btnRecord.classList.remove('recording');
+    if (btnRecordText) btnRecordText.textContent = 'Reanudar';
+    if (btnRecordInner) {
+      btnRecordInner.innerHTML = `
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polygon points="5 3 19 12 5 21 5 3"></polygon>
+        </svg>
+      `;
+    }
+    btnStop.disabled = false;
+    if (btnReset) btnReset.disabled = false;
+    if (statusText) statusText.textContent = 'Grabación pausada';
+    if (statusPulse) statusPulse.classList.add('hidden');
+  } else {
+    // Stopped / Idle
+    btnRecord.disabled = false;
+    btnRecord.classList.remove('recording');
+    if (btnRecordText) btnRecordText.textContent = 'Grabar';
+    if (btnRecordInner) {
+      btnRecordInner.innerHTML = `
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+          <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+          <line x1="12" y1="19" x2="12" y2="23" />
+          <line x1="8" y1="23" x2="16" y2="23" />
+        </svg>
+      `;
+    }
+    btnStop.disabled = true;
+    if (btnReset) btnReset.disabled = answerTextarea.value.trim() === '';
+    if (statusText) statusText.textContent = 'Listo para grabar';
+    if (statusPulse) statusPulse.classList.add('hidden');
+  }
+}
+
 function resetRecorderUI() {
   if (state.isRecording) stopRecording();
-  btnRecord.disabled = false;
-  btnRecord.classList.remove('recording');
-  btnStop.disabled = true;
+  updateRecorderUI();
 }
 
 // ─── Lógica para Grabación ──────────
-btnRecord.addEventListener('click', startRecording);
+btnRecord.addEventListener('click', () => {
+  if (state.isRecording) {
+    if (state.isPaused) {
+      resumeRecording();
+    } else {
+      pauseRecording();
+    }
+  } else {
+    startRecording();
+  }
+});
+
 btnStop.addEventListener('click', stopRecording);
+
+const btnReset = $('btnReset');
+if (btnReset) {
+  btnReset.addEventListener('click', resetRecording);
+}
+
+answerTextarea.addEventListener('input', () => {
+  if (!state.isRecording && btnReset) {
+    btnReset.disabled = answerTextarea.value.trim() === '';
+  }
+});
 
 async function startRecording() {
   if (!state.recognition) {
@@ -399,29 +719,52 @@ async function startRecording() {
   try {
     await navigator.mediaDevices.getUserMedia({ audio: true });
     
-    // Tomar lo que ya haya escrito el usuario como base
     state.baseTranscript = answerTextarea.value + (answerTextarea.value ? ' ' : '');
-    
     state.isRecording = true;
+    state.isPaused = false;
     state.recognition.start();
 
-    btnRecord.disabled = true;
-    btnRecord.classList.add('recording');
-    btnRecord.querySelector('span').textContent = 'Grabando...';
-    btnStop.disabled = false;
+    updateRecorderUI();
   } catch (err) {
     alert('Debes permitir el uso del micrófono.');
+  }
+}
+
+function pauseRecording() {
+  if (state.isRecording && !state.isPaused) {
+    state.isPaused = true;
+    state.recognition.stop();
+    updateRecorderUI();
+  }
+}
+
+function resumeRecording() {
+  if (state.isRecording && state.isPaused) {
+    state.isPaused = false;
+    state.baseTranscript = answerTextarea.value + (answerTextarea.value ? ' ' : '');
+    state.recognition.start();
+    updateRecorderUI();
   }
 }
 
 function stopRecording() {
   if (state.isRecording) {
     state.isRecording = false;
+    state.isPaused = false;
     state.recognition.stop();
-    btnRecord.classList.remove('recording');
-    btnRecord.querySelector('span').textContent = 'Usar Voz';
-    btnStop.disabled = true;
   }
+  updateRecorderUI();
+}
+
+function resetRecording() {
+  if (state.isRecording) {
+    state.isRecording = false;
+    state.isPaused = false;
+    state.recognition.stop();
+  }
+  answerTextarea.value = '';
+  state.baseTranscript = '';
+  startRecording();
 }
 
 // ─── Guardar Respuesta ─────────────────────
@@ -440,11 +783,14 @@ btnPrev.addEventListener('click', () => {
     saveCurrentAnswer();
     goToQuestion(state.currentQuestion - 1);
   } else {
-    // Pregunta 1 → regresar al formulario inicial
+    // Pregunta 1 → regresar a Datos de la empresa
     if (state.isRecording) stopRecording();
     viewQuiz.classList.add('hidden');
-    viewForm.classList.remove('hidden');
-    stepBadge.textContent = 'Paso 1 de 2';
+    viewCompany.classList.remove('hidden');
+    if (stepBadge && stepBadge.textContent !== undefined) {
+      stepBadge.textContent = 'Paso 2 de 3';
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 });
 
@@ -469,6 +815,9 @@ async function completeSession() {
   loadingOverlay.classList.remove('hidden');
 
   try {
+    const logoVal  = state.companyLogoData || (companyLogoUrlInput ? companyLogoUrlInput.value.trim() : '');
+    const brandVal = state.companyBrandData || (companyBrandUrlInput ? companyBrandUrlInput.value.trim() : '');
+
     const sheetData = {
       'Session ID': state.sessionId,
       'Fecha de Envío': new Date().toISOString(),
@@ -477,6 +826,14 @@ async function completeSession() {
       'Empresa': state.companyName,
       'Usuario Meta': state.metaUser,
       'Contraseña Meta': state.metaPasswordPreview,
+      'Dirección': state.companyAddress,
+      'Teléfono': state.companyPhone,
+      'Página Web': state.companyWebsite,
+      'Logo': logoVal,
+      'Identidad de Marca': brandVal,
+      'Redes Sociales': state.companySocialMedia,
+      'Observaciones': state.companyNotes,
+      'Tipo de Empresa y Servicio': state.companyServiceType,
     };
 
     QUESTIONS.forEach((q, index) => {

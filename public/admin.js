@@ -3,8 +3,6 @@
 // =============================================
 
 const SHEETDB_URL = 'https://sheetdb.io/api/v1/tpz4wdwvpet8d';
-const CASES_BASE  = 'https://sheetdb.io/api/v1/6sty8p65pjvjk';
-const CASES_URL   = `${CASES_BASE}?sheet=casos`;
 
 const QUESTIONS = [
   { id: 'Nombre del Bot',           label: '¿Nombre del Bot?',              q: '¿Qué nombre interno le daremos a este bot? (Ej. Bot de Ventas, Virtual Concierge)',                   placeholder: 'Ej. Asistente de Soporte' },
@@ -117,16 +115,20 @@ function daysUntil(date) {
 }
 
 // ─── LOGIN ──────────────────────────────────
-btnLogin.addEventListener('click', () => {
-  const email = adminEmail.value.trim().toLowerCase();
-  if (email === 'soporte@nextagency.app') {
-    adminLogin.classList.add('hidden');
-    adminDashboard.classList.remove('hidden');
-    loadClients();
-  } else {
-    alert('Acceso denegado. Correo no autorizado.');
-  }
-});
+const loginForm = document.getElementById('loginForm');
+if (loginForm) {
+  loginForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const email = adminEmail.value.trim().toLowerCase();
+    if (email === 'soporte@nextagency.app') {
+      adminLogin.classList.add('hidden');
+      adminDashboard.classList.remove('hidden');
+      loadClients();
+    } else {
+      alert('Acceso denegado. Correo no autorizado.');
+    }
+  });
+}
 
 // ─── PARSEO DE SERVICIOS MULTIPLES ────────────
 function parseClientServices(client) {
@@ -144,47 +146,26 @@ function parseClientServices(client) {
   })).filter(s => s.name);
 }
 
-// ─── TABS DASHBOARD ───────────────────────────
-window.switchDashTab = (tab) => {
-  ['registros', 'consultas'].forEach(t => {
-    document.getElementById(`dtb-${t}`).classList.toggle('active', t === tab);
-    document.getElementById(`dtb-${t}`).style.color = (t === tab) ? 'var(--clr-primary)' : 'var(--clr-text-2)';
-    document.getElementById(`dtb-${t}`).style.borderBottomColor = (t === tab) ? 'var(--clr-primary)' : 'transparent';
-    document.getElementById(`dpanel-${t}`).style.display = (t === tab) ? 'block' : 'none';
-  });
-};
 
-// ─── CARGAR CLIENTES Y CONSULTAS ────────────
+
+// ─── CARGAR CLIENTES ────────────
 async function loadClients() {
   const tableBody = document.getElementById('tableBody');
-  const tableBodyConsultas = document.getElementById('tableBodyConsultas');
 
   try {
-    // ⚡ Fetch ambas APIs EN PARALELO para no sumar tiempos de espera
-    const [res, casesRes] = await Promise.all([
-      fetch(SHEETDB_URL),
-      fetch(CASES_URL)
-    ]);
-    const [data, casesData] = await Promise.all([
-      res.json(),
-      casesRes.json()
-    ]);
+    const res = await fetch(SHEETDB_URL);
+    const data = await res.json();
 
     window.clientsData = data;
     tableBody.innerHTML = '';
-    tableBodyConsultas.innerHTML = '';
 
-    const defaultServices = ['WhatsApp', 'Instagram', 'Facebook Messenger', 'Telegram', 'Web Chat'];
+    const defaultServices = ['WhatsApp', 'Instagram DM', 'Facebook Messenger', 'Telegram', 'Web Chat'];
     let uniqueServices = new Set(defaultServices);
     
-    // Arrays separados
     const registros = [];
-    const consultas = [];
     
     data.forEach(c => {
-      if (c['Tipo'] === 'Consulta') {
-        consultas.push(c);
-      } else {
+      if (c['Tipo'] !== 'Consulta') {
         registros.push(c);
         const svcs = parseClientServices(c);
         svcs.forEach(s => {
@@ -200,285 +181,107 @@ async function loadClients() {
       tableBody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--clr-text-3);">No hay clientes registrados aún.</td></tr>';
     } else {
       registros.slice().reverse().forEach(client => {
-      const vencimientoDate = client['Fecha Vencimiento'];
-      const svcs = parseClientServices(client);
-      
-      let mostUrgentBilling = null;
-      svcs.forEach(svc => {
-        const b = calcBilling(svc.date, vencimientoDate);
-        if (b) {
-          if (!mostUrgentBilling) mostUrgentBilling = b;
-          else if (daysUntil(b.nextBill) < daysUntil(mostUrgentBilling.nextBill)) {
-            mostUrgentBilling = b;
+        const vencimientoDate = client['Fecha Vencimiento'];
+        const svcs = parseClientServices(client);
+        
+        let mostUrgentBilling = null;
+        svcs.forEach(svc => {
+          const b = calcBilling(svc.date, vencimientoDate);
+          if (b) {
+            if (!mostUrgentBilling) mostUrgentBilling = b;
+            else if (daysUntil(b.nextBill) < daysUntil(mostUrgentBilling.nextBill)) {
+              mostUrgentBilling = b;
+            }
           }
-        }
-      });
-      
-      const dateStr = client['Fecha de Envío'] ? fmt(client['Fecha de Envío']) : 'N/A';
-      
-      const serviceText = svcs.length > 1 
-        ? `${svcs.length} servicios` 
-        : (svcs.length === 1 ? svcs[0].name : '');
-
-      let badgeHtml = '<span class="badge pending">Sin activar</span>';
-      let billCellHtml = '<span style="color:var(--clr-text-3)">—</span>';
-
-      if (mostUrgentBilling) {
-        const days = daysUntil(mostUrgentBilling.nextBill);
-        if (mostUrgentBilling.status === 'trial') {
-          badgeHtml = '<span class="badge trial">🎁 Prueba</span>';
-          billCellHtml = `<div class="billing-info">
-            <span class="billing-value highlight">${fmt(mostUrgentBilling.nextBill)}</span>
-            <span class="billing-label">Primera factura</span>
-          </div>`;
-        } else {
-          badgeHtml = days <= 5
-            ? '<span class="badge overdue">⚠️ Cobro pronto</span>'
-            : '<span class="badge active">✅ Activo</span>';
-          billCellHtml = `<div class="billing-info">
-            <span class="billing-value ${days <= 5 ? 'danger' : 'ok'}">${fmt(mostUrgentBilling.nextBill)}</span>
-            <span class="billing-label">en ${days} días</span>
-          </div>`;
-        }
-      }
-
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td>
-          <div style="display:flex;align-items:center;gap:0.5rem;">
-            <span style="color:var(--clr-text-2);font-size:0.85rem;">${dateStr}</span>
-            <button
-              title="Eliminar cliente"
-              onclick="openDeleteModal('${client['Session ID']}', '${(client['Nombre Completo'] || '').replace(/'/g, "\\'").replace(/"/g, '&quot;')} — ${(client['Empresa'] || '').replace(/'/g, "\\'").replace(/"/g, '&quot;')}')"
-              style="background:none;border:none;cursor:pointer;padding:3px;border-radius:5px;color:#ef4444;opacity:0.6;transition:opacity 0.15s,background 0.15s;flex-shrink:0;"
-              onmouseover="this.style.opacity='1';this.style.background='rgba(239,68,68,0.1)'"
-              onmouseout="this.style.opacity='0.6';this.style.background='none'"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-                <path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
-              </svg>
-            </button>
-            <button
-              title="Actualizar datos del cliente"
-              onclick="openUpdateModal('${client['Session ID']}')"
-              style="background:none;border:none;cursor:pointer;padding:2px 6px;border-radius:5px;color:var(--clr-primary);font-size:0.7rem;font-weight:600;opacity:0.7;transition:opacity 0.15s,background 0.15s;flex-shrink:0;"
-              onmouseover="this.style.opacity='1';this.style.background='rgba(0,163,221,0.1)'"
-              onmouseout="this.style.opacity='0.7';this.style.background='none'"
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:2px;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-            </button>
-          </div>
-        </td>
-        <td>
-          <div style="font-weight:600;">${client['Empresa'] || 'N/A'}</div>
-          <div style="font-size:0.8rem;color:var(--clr-text-3);">${client['Nombre Completo'] || ''}</div>
-        </td>
-        <td>${serviceText ? `<strong>${serviceText}</strong>` : '<span style="color:var(--clr-text-3)">Sin asignar</span>'}</td>
-        <td>${badgeHtml}</td>
-        <td>${billCellHtml}</td>
-        <td style="text-align:center;">
-          <button class="btn-primary" style="padding:0.35rem 1rem;font-size:0.8rem;"
-            onclick="openClientDetail('${client['Session ID']}')">
-            Ver →
-          </button>
-        </td>
-      `;
-      tableBody.appendChild(tr);
-    });
-    }
-
-    // RENDERIZAR CONSULTAS (ya cargadas en paralelo arriba)
-    if (!Array.isArray(casesData) || !casesData.length) {
-      tableBodyConsultas.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:2rem;color:var(--clr-text-3);">No hay consultas.</td></tr>';
-    } else {
-      casesData.slice().reverse().forEach((query, i) => {
-          // Verificar si existe en registros
-          const qEmpresa = (query['Nombre de la empresa'] || '').trim().toLowerCase();
-          const qNombre  = (query['Nombre completo'] || '').trim().toLowerCase();
-          let isRegistered = false;
-          if (qEmpresa || qNombre) {
-            isRegistered = registros.some(r => {
-              const rE = (r['Empresa'] || '').trim().toLowerCase();
-              const rN = (r['Nombre Completo'] || '').trim().toLowerCase();
-              return (qEmpresa && qEmpresa === rE) || (qNombre && qNombre === rN);
-            });
-          }
-
-          const dateStr = query['Fecha consulta'] ? fmt(query['Fecha consulta']) : 'N/A';
-          const numStr  = query['NumeroConsulta'] ? `Consulta #${query['NumeroConsulta']}` : `Consulta #${casesData.length - i}`;
-          const especialista = (query['Especialista'] || '').trim();
-          const checkIcon = isRegistered
-            ? `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.5" title="Cliente Registrado"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`
-            : `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--clr-text-3)" stroke-width="2" title="Prospecto Nuevo"><circle cx="12" cy="12" r="10"/></svg>`;
-
-          // Usar Fecha consulta como ID único para actualizar
-          const fechaKey = query['Fecha consulta'] || '';
-
-          const especialistaBadge = especialista
-            ? `<span style="display:inline-flex;align-items:center;gap:4px;background:rgba(16,185,129,0.1);color:#10b981;font-size:0.75rem;font-weight:600;padding:3px 8px;border-radius:20px;">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                ${especialista}
-               </span>`
-            : `<button onclick="tomarCaso('${fechaKey}','${numStr}')" style="background:var(--clr-primary);color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:0.78rem;font-weight:600;cursor:pointer;transition:opacity 0.2s;" onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">Tomar caso</button>`;
-
-          const respuestaActual = (query['Respuesta'] || '').trim();
-          const respuestaDropdown = `
-            <select onchange="actualizarRespuesta('${fechaKey}', this.value)" style="padding: 4px 8px; border-radius: 6px; border: 1px solid var(--clr-border, #ccc); font-size: 0.78rem; outline: none; background: #fff; cursor: pointer; color: var(--clr-text-1);">
-              <option value="" ${!respuestaActual ? 'selected' : ''}>Acciones</option>
-              <option value="Seguimiento" ${respuestaActual === 'Seguimiento' ? 'selected' : ''}>Seguimiento</option>
-              <option value="Finalizado" ${respuestaActual === 'Finalizado' ? 'selected' : ''}>Finalizado</option>
-              <option value="Escalado" ${respuestaActual === 'Escalado' ? 'selected' : ''}>Escalado</option>
-            </select>
-          `;
-
-          const safeId = `nota-${i}`;
-          const notasTextarea = `
-            <div style="display:flex; flex-direction:column; gap:6px;">
-              <textarea 
-                id="${safeId}"
-                placeholder="Añadir nueva nota..." 
-                style="width: 100%; min-width: 200px; height: 60px; padding: 6px; border-radius: 6px; border: 1px solid var(--clr-border, #ccc); font-size: 0.78rem; font-family: inherit; resize: vertical; outline: none; background: #fff; color: var(--clr-text-1); transition: border-color 0.2s;"
-                onfocus="this.style.borderColor='var(--clr-primary)'"
-                onblur="this.style.borderColor='var(--clr-border, #ccc)'"
-              ></textarea>
-              <button onclick="actualizarComentarios('${fechaKey}', '${safeId}', '${numStr}', '${especialista}')" style="align-self:flex-end; background:var(--clr-primary); color:#fff; border:none; border-radius:4px; padding:4px 10px; font-size:0.75rem; font-weight:600; cursor:pointer; transition:opacity 0.2s;" onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">Guardar Nota</button>
-            </div>
-          `;
-
-          const tr = document.createElement('tr');
-          tr.innerHTML = `
-            <td>
-              <div style="color:var(--clr-primary); font-weight:700; font-size:0.78rem; margin-bottom:2px;">${numStr}</div>
-              <span style="color:var(--clr-text-2);font-size:0.82rem;">${dateStr}</span>
-            </td>
-            <td>
-              <div style="display:flex;align-items:center;gap:8px;">
-                ${checkIcon}
-                <div>
-                  <div style="font-weight:600;">${query['Nombre de la empresa'] || 'N/A'}</div>
-                  <div style="font-size:0.78rem;color:var(--clr-text-3);">${query['Nombre completo'] || ''}</div>
-                </div>
-              </div>
-            </td>
-            <td>
-              <div style="max-width:320px; white-space:pre-wrap; font-size:0.83rem; color:var(--clr-text-1); line-height:1.5;">${(query['Tu consulta'] || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
-            </td>
-            <td>${notasTextarea}</td>
-            <td style="text-align:center;">${especialistaBadge}</td>
-            <td style="text-align:center;">${respuestaDropdown}</td>
-          `;
-          tableBodyConsultas.appendChild(tr);
         });
-      }
+        
+        const dateStr = client['Fecha de Envío'] ? fmt(client['Fecha de Envío']) : 'N/A';
+        
+        let serviceText = '<span style="color:var(--clr-text-3);">Ninguno</span>';
+        if (svcs.length > 0) {
+          serviceText = '<ul style="margin:0; padding-left:1.2rem; font-weight:500; font-size:0.85rem; list-style-type:disc;">' + svcs.map(s => {
+            const isWs = s.name.toLowerCase().includes('whatsapp') || s.name.toLowerCase().includes('wasap');
+            const titleAttr = isWs 
+              ? ` title="Aunque esté en período de prueba tiene coste desde el primer día de $20 USD mensuales." style="cursor:help; border-bottom:1px dotted var(--clr-text-3);"` 
+              : '';
+            return `<li${titleAttr}>${s.name}</li>`;
+          }).join('') + '</ul>';
+        }
 
+        let badgeHtml = '<span class="badge pending">Sin activar</span>';
+        let billCellHtml = '<span style="color:var(--clr-text-3)">—</span>';
+
+        if (mostUrgentBilling) {
+          const days = daysUntil(mostUrgentBilling.nextBill);
+          if (mostUrgentBilling.status === 'trial') {
+            badgeHtml = '<span class="badge trial">🎁 Prueba</span>';
+            billCellHtml = `<div class="billing-info">
+              <span class="billing-value highlight">${fmt(mostUrgentBilling.nextBill)}</span>
+              <span class="billing-label">Primera factura</span>
+            </div>`;
+          } else {
+            badgeHtml = days <= 5
+              ? '<span class="badge overdue">⚠️ Cobro pronto</span>'
+              : '<span class="badge active">✅ Activo</span>';
+            billCellHtml = `<div class="billing-info">
+              <span class="billing-value ${days <= 5 ? 'danger' : 'ok'}">${fmt(mostUrgentBilling.nextBill)}</span>
+              <span class="billing-label">en ${days} días</span>
+            </div>`;
+          }
+        }
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>
+            <div style="display:flex;align-items:center;gap:0.5rem;">
+              <span style="color:var(--clr-text-2);font-size:0.85rem;">${dateStr}</span>
+              <button
+                title="Eliminar cliente"
+                onclick="openDeleteModal('${client['Session ID']}', '${(client['Nombre Completo'] || '').replace(/'/g, "\\'").replace(/"/g, '&quot;')} — ${(client['Empresa'] || '').replace(/'/g, "\\'").replace(/"/g, '&quot;')}')"
+                style="background:none;border:none;cursor:pointer;padding:3px;border-radius:5px;color:#ef4444;opacity:0.6;transition:opacity 0.15s,background 0.15s;flex-shrink:0;"
+                onmouseover="this.style.opacity='1';this.style.background='rgba(239,68,68,0.1)'"
+                onmouseout="this.style.opacity='0.6';this.style.background='none'"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                  <path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                </svg>
+              </button>
+              <button
+                title="Actualizar datos del cliente"
+                onclick="openUpdateModal('${client['Session ID']}')"
+                style="background:none;border:none;cursor:pointer;padding:2px 6px;border-radius:5px;color:var(--clr-primary);font-size:0.7rem;font-weight:600;opacity:0.7;transition:opacity 0.15s,background 0.15s;flex-shrink:0;"
+                onmouseover="this.style.opacity='1';this.style.background='rgba(0,163,221,0.1)'"
+                onmouseout="this.style.opacity='0.7';this.style.background='none'"
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:2px;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              </button>
+            </div>
+          </td>
+          <td>
+            <div style="font-weight:600;">${client['Empresa'] || 'N/A'}</div>
+            <div style="font-size:0.8rem;color:var(--clr-text-3);">${client['Nombre Completo'] || ''}</div>
+          </td>
+          <td>${serviceText ? `<strong>${serviceText}</strong>` : '<span style="color:var(--clr-text-3)">Sin asignar</span>'}</td>
+          <td>${badgeHtml}</td>
+          <td>${billCellHtml}</td>
+          <td style="text-align:center;">
+            <button class="btn-primary" style="padding:0.35rem 1rem;font-size:0.8rem;"
+              onclick="openClientDetail('${client['Session ID']}')">
+              Ver →
+            </button>
+          </td>
+        `;
+        tableBody.appendChild(tr);
+      });
+    }
   } catch (err) {
     console.error('Error loading clients:', err);
     tableBody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:red;padding:1rem;">Error al cargar datos.</td></tr>';
   }
 }
 
-// ─── TOMAR CASO ──────────────────────────
-window.tomarCaso = async (fechaKey, label) => {
-  if (!fechaKey) {
-    alert('No se puede actualizar este caso porque no tiene fecha de envío.');
-    return;
-  }
-  const nombre = prompt(`¿Cuál es tu nombre para tomar ${label}?`);
-  if (!nombre || !nombre.trim()) return;
-  const nombreTrimmed = nombre.trim();
 
-  try {
-    // Actualizar usando 'Fecha consulta' como clave única de búsqueda
-    const updateRes = await fetch(
-      `${CASES_BASE}/Fecha%20consulta/${encodeURIComponent(fechaKey)}?sheet=casos`,
-      {
-        method: 'PATCH',
-        headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-        body: JSON.stringify({ data: { 'Especialista': nombreTrimmed } }),
-      }
-    );
-    if (!updateRes.ok) {
-      const errBody = await updateRes.text();
-      throw new Error(`HTTP ${updateRes.status}: ${errBody}`);
-    }
-    loadClients();
-  } catch (e) {
-    console.error('tomarCaso error:', e);
-    alert('Error al asignar el especialista. Intenta de nuevo.');
-  }
-};
-
-// ─── ACTUALIZAR RESPUESTA (ESTADO) ─────────
-window.actualizarRespuesta = async (fechaKey, status) => {
-  if (!fechaKey) return;
-  try {
-    const updateRes = await fetch(
-      `${CASES_BASE}/Fecha%20consulta/${encodeURIComponent(fechaKey)}?sheet=casos`,
-      {
-        method: 'PATCH',
-        headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-        body: JSON.stringify({ data: { 'Respuesta': status } }),
-      }
-    );
-    if (!updateRes.ok) {
-      const errBody = await updateRes.text();
-      throw new Error(`HTTP ${updateRes.status}: ${errBody}`);
-    }
-    // Opcional: mostrar feedback de guardado exitoso
-    const msg = document.createElement('div');
-    msg.textContent = 'Estado actualizado';
-    msg.style.cssText = 'position:fixed; bottom:20px; right:20px; background:#10b981; color:#fff; padding:10px 20px; border-radius:8px; font-size:0.85rem; font-weight:600; z-index:9999; box-shadow:0 4px 12px rgba(0,0,0,0.15);';
-    document.body.appendChild(msg);
-    setTimeout(() => msg.remove(), 2500);
-  } catch (e) {
-    console.error('actualizarRespuesta error:', e);
-    alert('Error al actualizar el estado de la consulta. Verifica tu conexión.');
-    loadClients(); // revert UI change if failed
-  }
-};
-
-// ─── AGREGAR COMENTARIOS AL HISTORIAL ────────────────
-window.actualizarComentarios = async (fechaKey, textareaId, consultaLabel, especialista) => {
-  if (!fechaKey) return;
-  const textarea = document.getElementById(textareaId);
-  const notas = textarea.value.trim();
-  if (!notas) return; // No guardar notas vacías
-
-  try {
-    // 1. Registrar el historial en la hoja "Historial Notas"
-    const fechaHoraStr = new Date().toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' });
-    const logData = {
-      'FechaRegistro': fechaHoraStr,
-      'ConsultaRelacionada': consultaLabel,
-      'Especialista': especialista || 'Desconocido',
-      'Nota': notas
-    };
-    
-    const postRes = await fetch(`${CASES_BASE}?sheet=Historial%20Notas`, {
-      method: 'POST',
-      headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-      body: JSON.stringify({ data: [logData] }),
-    });
-
-    if (!postRes.ok) {
-      throw new Error('Error al guardar en el Historial');
-    }
-
-    // 2. Limpiar el textarea
-    textarea.value = '';
-
-    // Feedback visual pequeño
-    const msg = document.createElement('div');
-    msg.textContent = 'Nota guardada en Historial';
-    msg.style.cssText = 'position:fixed; bottom:20px; right:20px; background:#10b981; color:#fff; padding:10px 20px; border-radius:8px; font-size:0.85rem; font-weight:600; z-index:9999; box-shadow:0 4px 12px rgba(0,0,0,0.15);';
-    document.body.appendChild(msg);
-    setTimeout(() => msg.remove(), 2500);
-  } catch (e) {
-    console.error('actualizarComentarios error:', e);
-    alert('Error al guardar la nota. Verifica tu conexión.');
-  }
-};
 
 // ─── ABRIR PANEL DE DETALLE ─────────────────
 window.openClientDetail = (sessionId) => {
@@ -502,6 +305,9 @@ window.openClientDetail = (sessionId) => {
 
   // Llenar Tab Servicios
   fillServiciosTab(client, billing);
+
+  // Llenar Tab Datos Empresa
+  fillEmpresaTab(client);
 
   // Llenar Tab Preguntas
   fillPreguntasTab(client);
@@ -555,6 +361,10 @@ function updateDetailFooter() {
         <span id="detailSaveServiceText">Guardar servicio</span>
       </button>
     `;
+  } else if (currentTab === 'empresa') {
+    detailFooter.innerHTML = `
+      <button class="btn-secondary" style="flex:1;" onclick="closeClientDetail()">Cerrar</button>
+    `;
   } else if (currentTab === 'preguntas') {
     detailFooter.innerHTML = `
       <button class="btn-secondary" style="flex:1;" onclick="closeClientDetail()">Cancelar</button>
@@ -574,6 +384,8 @@ function updateDetailFooter() {
 
 let currentClientServices = [];
 
+let currentCrmDate = '';
+
 // ─── LLENAR TAB SERVICIOS ───────────────────
 function fillServiciosTab(client, billing) {
   // Meta
@@ -587,15 +399,28 @@ function fillServiciosTab(client, billing) {
     dMetaPassWrap.style.display = 'none';
   }
 
+  const crmDateInput = document.getElementById('d-crmDate');
+  currentCrmDate = client['Fecha Activación Servicios'] || '';
+  if (crmDateInput) crmDateInput.value = currentCrmDate;
+
   currentClientServices = parseClientServices(client);
   renderServicesList();
+  updateDetailBillingPreview();
 
-  // Servicios select
-  dServicesSelect.innerHTML = '<option value="">-- Añadir servicio existente --</option>';
-  (window.availableServices || []).forEach(s => {
-    dServicesSelect.innerHTML += `<option value="${s}">${s}</option>`;
-  });
-  dServicesSelect.innerHTML += '<option value="_ADD_NEW_">➕ Añadir nuevo...</option>';
+  const servicesSelect = document.getElementById('d-servicesSelect');
+  if (servicesSelect) {
+    servicesSelect.innerHTML = '<option value="">-- Añadir agregado --</option>';
+    (window.availableServices || []).forEach(s => {
+      servicesSelect.innerHTML += `<option value="${s}">${s}</option>`;
+    });
+    servicesSelect.innerHTML += '<option value="_ADD_NEW_">➕ Crear nuevo...</option>';
+
+    servicesSelect.onchange = (e) => {
+      if (e.target.value === '_ADD_NEW_') {
+        addServiceFromSelect();
+      }
+    };
+  }
 }
 
 function renderServicesList() {
@@ -604,28 +429,41 @@ function renderServicesList() {
   container.innerHTML = '';
   
   if (currentClientServices.length === 0) {
-    container.innerHTML = '<div style="color:var(--clr-text-3); font-size:0.85rem; padding:0.5rem 0;">No hay servicios.</div>';
+    container.innerHTML = '<div style="color:var(--clr-text-3); font-size:0.85rem; padding:0.5rem 0;">No hay agregados.</div>';
   }
 
   currentClientServices.forEach((svc, index) => {
+    const isWasap = svc.name.toLowerCase().includes('wasap') || svc.name.toLowerCase().includes('whatsapp');
+
     const div = document.createElement('div');
-    div.style = 'display:flex; align-items:center; gap:0.5rem; background:#f8fafc; padding:0.5rem 0.75rem; border-radius:0.5rem; border:1px solid #e2e8f0;';
+    div.style = 'display:flex; flex-direction:column; gap:0.25rem; background:#f8fafc; padding:0.5rem 0.75rem; border-radius:0.5rem; border:1px solid #e2e8f0;';
     
-    div.innerHTML = `
-      <div style="flex:1; font-weight:600; color:var(--clr-text-1); font-size:0.9rem;">${svc.name}</div>
-      <input type="date" class="field-input" style="width:140px; padding:0.4rem; font-size:0.8rem;" value="${svc.date}" onchange="updateServiceDate(${index}, this.value)">
-      <button type="button" onclick="removeService(${index})" style="background:none; border:none; color:var(--clr-danger); cursor:pointer; padding:0.2rem; display:flex; align-items:center; justify-content:center; border-radius:0.3rem;" onmouseover="this.style.background='rgba(239,68,68,0.1)'" onmouseout="this.style.background='none'">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-      </button>
+    let inner = `
+      <div style="display:flex; align-items:center; gap:0.5rem;">
+        <div style="flex:1; font-weight:600; color:var(--clr-text-1); font-size:0.9rem;">${svc.name}</div>
+        <input type="date" class="field-input" style="width:140px; padding:0.4rem; font-size:0.8rem;" value="${svc.date}" onchange="updateServiceDate(${index}, this.value)">
+        <button type="button" onclick="removeService(${index})" style="background:none; border:none; color:var(--clr-danger); cursor:pointer; padding:0.2rem; display:flex; align-items:center; justify-content:center; border-radius:0.3rem;" onmouseover="this.style.background='rgba(239,68,68,0.1)'" onmouseout="this.style.background='none'">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
     `;
+
+    if (isWasap) {
+      inner += `<div style="color:var(--clr-danger); font-size:0.75rem; font-weight:600;">⚠️ Aunque esté en período de prueba tiene coste desde el primer día de $20 USD mensuales.</div>`;
+    }
+
+    div.innerHTML = inner;
     container.appendChild(div);
   });
-  updateDetailBillingPreview();
 }
+
+window.updateCrmDate = (val) => {
+  currentCrmDate = val;
+  updateDetailBillingPreview();
+};
 
 window.updateServiceDate = (index, val) => {
   currentClientServices[index].date = val;
-  updateDetailBillingPreview();
 };
 
 window.removeService = (index) => {
@@ -663,23 +501,15 @@ function updateDetailBillingPreview() {
   const dBillingPreviewText = document.getElementById('d-billingPreviewText');
   const dBillingStatus  = document.getElementById('d-billingStatus');
   
-  if (!currentClient || currentClientServices.length === 0) {
+  if (!currentClient || !currentCrmDate) {
     dBillingPreview.style.display = 'flex';
-    dBillingPreviewText.innerHTML = '<span style="color:var(--clr-text-3);">Sin servicios para calcular.</span>';
+    dBillingPreviewText.innerHTML = '<span style="color:var(--clr-text-3);">Fecha de CRM GHL no establecida.</span>';
     dBillingStatus.innerHTML  = '<div class="field-input" style="color:var(--clr-text-3);">Sin datos</div>';
     return;
   }
 
   const vencimientoDate = currentClient['Fecha Vencimiento'];
-  let mostUrgent = null;
-
-  currentClientServices.forEach(svc => {
-    const b = calcBilling(svc.date, vencimientoDate);
-    if (b) {
-      if (!mostUrgent) mostUrgent = b;
-      else if (daysUntil(b.nextBill) < daysUntil(mostUrgent.nextBill)) mostUrgent = b;
-    }
-  });
+  const mostUrgent = calcBilling(currentCrmDate, vencimientoDate);
 
   if (!mostUrgent) {
     dBillingPreview.style.display = 'flex';
@@ -719,6 +549,80 @@ function updateDetailBillingPreview() {
   }
 }
 
+// ─── LLENAR TAB DATOS EMPRESA ───────────────
+function fillEmpresaTab(client) {
+  const addrEl = document.getElementById('d-companyAddress');
+  const phoneEl = document.getElementById('d-companyPhone');
+  const webEl = document.getElementById('d-companyWebsite');
+  const socialEl = document.getElementById('d-companySocial');
+  const serviceTypeEl = document.getElementById('d-companyServiceType');
+  const notesEl = document.getElementById('d-companyNotes');
+  const logoBox = document.getElementById('d-logoContainer');
+  const brandBox = document.getElementById('d-brandContainer');
+
+  if (addrEl) addrEl.textContent = client['Dirección'] || client['Direccion'] || '—';
+  if (phoneEl) phoneEl.textContent = client['Teléfono'] || client['Telefono'] || '—';
+
+  if (webEl) {
+    const web = client['Página Web'] || client['Pagina Web'] || '';
+    if (web && (web.startsWith('http://') || web.startsWith('https://'))) {
+      webEl.innerHTML = `<a href="${web}" target="_blank" rel="noopener noreferrer" style="color:var(--clr-primary); text-decoration:underline; font-weight:600;">${web}</a>`;
+    } else {
+      webEl.textContent = web || '—';
+    }
+  }
+
+  if (socialEl) socialEl.textContent = client['Redes Sociales'] || '—';
+  if (serviceTypeEl) serviceTypeEl.textContent = client['Tipo de Empresa y Servicio'] || '—';
+  if (notesEl) notesEl.textContent = client['Observaciones'] || '—';
+
+  // Logo
+  if (logoBox) {
+    const logo = client['Logo'] || '';
+    if (logo.startsWith('data:image')) {
+      logoBox.innerHTML = `
+        <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+          <img src="${logo}" alt="Logo" style="max-height:70px; max-width:160px; object-fit:contain; border-radius:8px; border:1px solid var(--clr-border); background:#f8fafc; padding:6px;" />
+          <a href="${logo}" download="logo.jpg" class="btn-secondary" style="font-size:0.8rem; padding:0.4rem 0.85rem; text-decoration:none;">⬇️ Descargar logo</a>
+        </div>
+      `;
+    } else if (logo.startsWith('http://') || logo.startsWith('https://')) {
+      logoBox.innerHTML = `
+        <a href="${logo}" target="_blank" rel="noopener noreferrer" style="color:var(--clr-primary); text-decoration:underline; font-size:0.88rem; font-weight:600;">🔗 Abrir logo en enlace externo</a>
+      `;
+    } else if (logo) {
+      logoBox.innerHTML = `<span style="font-size:0.85rem; color:var(--clr-text-2);">${logo}</span>`;
+    } else {
+      logoBox.innerHTML = `<span style="color:var(--clr-text-3); font-size:0.85rem;">No se adjuntó logo.</span>`;
+    }
+  }
+
+  // Identidad de Marca
+  if (brandBox) {
+    const brand = client['Identidad de Marca'] || '';
+    if (brand.startsWith('data:image')) {
+      brandBox.innerHTML = `
+        <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+          <img src="${brand}" alt="Activo de marca" style="max-height:70px; max-width:160px; object-fit:contain; border-radius:8px; border:1px solid var(--clr-border); background:#f8fafc; padding:6px;" />
+          <a href="${brand}" download="marca.jpg" class="btn-secondary" style="font-size:0.8rem; padding:0.4rem 0.85rem; text-decoration:none;">⬇️ Descargar activo</a>
+        </div>
+      `;
+    } else if (brand.startsWith('data:')) {
+      brandBox.innerHTML = `
+        <a href="${brand}" download="identidad_marca" class="btn-secondary" style="font-size:0.8rem; padding:0.4rem 0.85rem; text-decoration:none;">⬇️ Descargar archivo de marca</a>
+      `;
+    } else if (brand.startsWith('http://') || brand.startsWith('https://')) {
+      brandBox.innerHTML = `
+        <a href="${brand}" target="_blank" rel="noopener noreferrer" style="color:var(--clr-primary); text-decoration:underline; font-size:0.88rem; font-weight:600;">🔗 Abrir manual en enlace externo</a>
+      `;
+    } else if (brand) {
+      brandBox.innerHTML = `<span style="font-size:0.85rem; color:var(--clr-text-2);">${brand}</span>`;
+    } else {
+      brandBox.innerHTML = `<span style="color:var(--clr-text-3); font-size:0.85rem;">No se adjuntó archivo de marca.</span>`;
+    }
+  }
+}
+
 // ─── GUARDAR DETALLES ───────────────────────
 window.saveServiceFromDetail = async (sessionId) => {
   const btn = document.getElementById('detailSaveServiceText');
@@ -730,7 +634,10 @@ window.saveServiceFromDetail = async (sessionId) => {
     const res = await fetch(url, {
       method: 'PATCH',
       headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-      body: JSON.stringify({ data: { 'Servicios Activados': jsonStr } })
+      body: JSON.stringify({ data: { 
+        'Servicios Activados': jsonStr,
+        'Fecha Activación Servicios': currentCrmDate
+      } })
     });
     const result = await res.json();
     if (result.updated) {
