@@ -551,6 +551,9 @@ function updateDetailBillingPreview() {
 
 // ─── LLENAR TAB DATOS EMPRESA ───────────────
 function fillEmpresaTab(client) {
+  const nameEl = document.getElementById('d-companyName');
+  const emailEl = document.getElementById('d-companyEmail');
+  const rifEl = document.getElementById('d-companyRif');
   const addrEl = document.getElementById('d-companyAddress');
   const phoneEl = document.getElementById('d-companyPhone');
   const webEl = document.getElementById('d-companyWebsite');
@@ -560,6 +563,9 @@ function fillEmpresaTab(client) {
   const logoBox = document.getElementById('d-logoContainer');
   const brandBox = document.getElementById('d-brandContainer');
 
+  if (nameEl) nameEl.textContent = client['Empresa'] || client['Nombre de la empresa'] || '—';
+  if (emailEl) emailEl.textContent = client['Usuario Meta'] || client['Correo'] || client['Email'] || '—';
+  if (rifEl) rifEl.textContent = client['Rif'] || client['RIF'] || '—';
   if (addrEl) addrEl.textContent = client['Dirección'] || client['Direccion'] || '—';
   if (phoneEl) phoneEl.textContent = client['Teléfono'] || client['Telefono'] || '—';
 
@@ -573,8 +579,8 @@ function fillEmpresaTab(client) {
   }
 
   if (socialEl) socialEl.textContent = client['Redes Sociales'] || '—';
-  if (serviceTypeEl) serviceTypeEl.textContent = client['Tipo de Empresa y Servicio'] || '—';
   if (notesEl) notesEl.textContent = client['Observaciones'] || '—';
+  if (serviceTypeEl) serviceTypeEl.textContent = client['Tipo de Empresa y Servicio'] || '—';
 
   // Logo
   if (logoBox) {

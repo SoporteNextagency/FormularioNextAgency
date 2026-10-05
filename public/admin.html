@@ -674,20 +674,14 @@
         <div class="service-section">
           <div class="section-title">Información de la Empresa</div>
           
+          <div class="meta-chip"><strong>Nombre de la empresa</strong><span id="d-companyName" style="font-weight:600; color:var(--clr-text-1);">—</span></div>
+          <div class="meta-chip"><strong>Correo</strong><span id="d-companyEmail">—</span></div>
+          <div class="meta-chip"><strong>Rif</strong><span id="d-companyRif">—</span></div>
           <div class="meta-chip"><strong>Dirección</strong><span id="d-companyAddress">—</span></div>
           <div class="meta-chip"><strong>Teléfono</strong><span id="d-companyPhone">—</span></div>
           <div class="meta-chip">
             <strong>Página Web</strong>
             <span id="d-companyWebsite">—</span>
-          </div>
-          <div class="meta-chip"><strong>Redes Sociales</strong><span id="d-companySocial">—</span></div>
-          <div class="meta-chip" style="align-items: flex-start;">
-            <strong>Tipo de Empresa y Servicio</strong>
-            <span id="d-companyServiceType" style="white-space: pre-wrap; font-weight: normal; margin-left: auto; text-align: right; max-width: 60%;">—</span>
-          </div>
-          <div class="meta-chip" style="align-items: flex-start;">
-            <strong>Observaciones</strong>
-            <span id="d-companyNotes" style="white-space: pre-wrap; font-weight: normal; margin-left: auto; text-align: right; max-width: 60%;">—</span>
           </div>
         </div>
 
@@ -696,7 +690,7 @@
           
           <!-- Logo -->
           <div style="margin-bottom: 1.25rem;">
-            <label class="field-label" style="margin-bottom: 0.4rem; display:block;">Logo Adjunto</label>
+            <label class="field-label" style="margin-bottom: 0.4rem; display:block; font-weight:700;">Logo</label>
             <div id="d-logoContainer">
               <span style="color:var(--clr-text-3); font-size:0.85rem;">No se adjuntó logo.</span>
             </div>
@@ -704,10 +698,24 @@
 
           <!-- Identidad de Marca -->
           <div>
-            <label class="field-label" style="margin-bottom: 0.4rem; display:block;">Identidad de Marca / Manual</label>
+            <label class="field-label" style="margin-bottom: 0.4rem; display:block; font-weight:700;">Identidad de Marca</label>
             <div id="d-brandContainer">
               <span style="color:var(--clr-text-3); font-size:0.85rem;">No se adjuntó archivo de marca.</span>
             </div>
+          </div>
+        </div>
+
+        <div class="service-section" style="margin-top: 1rem;">
+          <div class="section-title">Detalles y Observaciones</div>
+
+          <div class="meta-chip"><strong>Redes Sociales</strong><span id="d-companySocial">—</span></div>
+          <div class="meta-chip" style="align-items: flex-start;">
+            <strong>Observaciones</strong>
+            <span id="d-companyNotes" style="white-space: pre-wrap; font-weight: normal; margin-left: auto; text-align: right; max-width: 60%;">—</span>
+          </div>
+          <div class="meta-chip" style="align-items: flex-start;">
+            <strong>Tipo de Empresa y Servicio</strong>
+            <span id="d-companyServiceType" style="white-space: pre-wrap; font-weight: normal; margin-left: auto; text-align: right; max-width: 60%;">—</span>
           </div>
         </div>
       </div>
@@ -851,7 +859,7 @@
     </div>
   </div>
 
-  <script src="admin.js?v=5.7" defer></script>
+  <script src="admin.js?v=5.8" defer></script>
 </body>
 
 </html>
