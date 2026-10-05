@@ -388,35 +388,51 @@ if (companyForm) {
 }
 
 // ─── Archivos adjuntables: Logo e Identidad ───
+// Google Sheets tiene un límite estricto de 50.000 caracteres por celda.
+// Garantizamos que las miniaturas base64 queden siempre por debajo de 30.000 caracteres.
 function compressImage(file, callback) {
   const reader = new FileReader();
   reader.onload = (e) => {
     const img = new Image();
     img.onload = () => {
-      const maxDim = 480;
-      let width = img.width;
-      let height = img.height;
-      if (width > maxDim || height > maxDim) {
-        if (width > height) {
-          height = Math.round((height * maxDim) / width);
-          width = maxDim;
-        } else {
-          width = Math.round((width * maxDim) / height);
-          height = maxDim;
+      const render = (dim, q) => {
+        let width = img.width;
+        let height = img.height;
+        if (width > dim || height > dim) {
+          if (width > height) {
+            height = Math.round((height * dim) / width);
+            width = dim;
+          } else {
+            width = Math.round((width * dim) / height);
+            height = dim;
+          }
         }
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, width);
+        canvas.height = Math.max(1, height);
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        return canvas.toDataURL('image/jpeg', q);
+      };
+
+      let dataUrl = render(200, 0.65);
+      if (dataUrl.length > 30000) {
+        dataUrl = render(150, 0.50);
       }
-      const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0, width, height);
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.70);
+      if (dataUrl.length > 30000) {
+        dataUrl = render(100, 0.40);
+      }
+
       const approxKb = (dataUrl.length * 0.75 / 1024).toFixed(1) + ' KB';
       callback(dataUrl, approxKb);
     };
     img.onerror = () => {
       const approxKb = (file.size / 1024).toFixed(1) + ' KB';
-      callback(e.target.result, approxKb);
+      if (e.target.result && e.target.result.length <= 30000) {
+        callback(e.target.result, approxKb);
+      } else {
+        callback(`[Archivo adjunto: ${file.name} (${approxKb})]`, approxKb);
+      }
     };
     img.src = e.target.result;
   };
@@ -490,9 +506,15 @@ if (companyBrandFileInput) {
       compressImage(file, (dataUrl) => {
         state.companyBrandData = dataUrl;
       });
-    } else if (file.size <= 32000) {
+    } else if (file.size <= 15000 && (file.type === 'text/plain' || file.type === 'image/svg+xml')) {
       const reader = new FileReader();
-      reader.onload = (e) => { state.companyBrandData = e.target.result; };
+      reader.onload = (e) => {
+        if (e.target.result && e.target.result.length <= 30000) {
+          state.companyBrandData = e.target.result;
+        } else {
+          state.companyBrandData = `[Archivo adjunto: ${file.name} (${sizeStr})]`;
+        }
+      };
       reader.readAsDataURL(file);
     } else {
       state.companyBrandData = `[Archivo adjunto: ${file.name} (${sizeStr})]`;
@@ -815,13 +837,17 @@ async function completeSession() {
   loadingOverlay.classList.remove('hidden');
 
   try {
-    const logoVal  = state.companyLogoData || (companyLogoUrlInput ? companyLogoUrlInput.value.trim() : '');
-    const brandVal = state.companyBrandData || (companyBrandUrlInput ? companyBrandUrlInput.value.trim() : '');
+    const logoVal  = (companyLogoUrlInput && companyLogoUrlInput.value.trim())
+      || state.companyLogoData
+      || (state.companyLogoName ? `[Archivo adjunto: ${state.companyLogoName}]` : '');
+
+    const brandVal = (companyBrandUrlInput && companyBrandUrlInput.value.trim())
+      || state.companyBrandData
+      || (state.companyBrandName ? `[Archivo adjunto: ${state.companyBrandName}]` : '');
 
     const sheetData = {
       'Session ID': state.sessionId,
       'Fecha de Envío': new Date().toISOString(),
-      'Tipo': 'Registro',
       'Nombre Completo': state.fullName,
       'Empresa': state.companyName,
       'Usuario Meta': state.metaUser,
@@ -843,6 +869,21 @@ async function completeSession() {
     sheetData['Servicios Activados'] = '';
     sheetData['Fecha Activación Servicios'] = '';
 
+    // Límite de Google Sheets: 50.000 caracteres por celda.
+    // Garantizar que ningún campo supere los 35.000 caracteres.
+    const MAX_CELL_CHARS = 35000;
+    for (const key of Object.keys(sheetData)) {
+      if (typeof sheetData[key] === 'string' && sheetData[key].length > MAX_CELL_CHARS) {
+        if (key === 'Logo') {
+          sheetData[key] = state.companyLogoName ? `[Logo adjunto: ${state.companyLogoName}]` : '';
+        } else if (key === 'Identidad de Marca') {
+          sheetData[key] = state.companyBrandName ? `[Marca adjunta: ${state.companyBrandName}]` : '';
+        } else {
+          sheetData[key] = sheetData[key].substring(0, MAX_CELL_CHARS) + '... [truncado por límite de celda]';
+        }
+      }
+    }
+
     const res = await fetch(SHEETDB_URL, {
       method: 'POST',
       headers: {
@@ -852,11 +893,16 @@ async function completeSession() {
       body: JSON.stringify({ data: [sheetData] }),
     });
 
-    await res.json();
+    const result = await res.json().catch(() => ({}));
+    if (!res.ok || result.error || (!result.created && !result.rows)) {
+      const errMsg = result.error || `Error del servidor (${res.status}): No se pudo guardar la información.`;
+      throw new Error(errMsg);
+    }
+
     showSuccess();
   } catch (err) {
     console.error('Error al guardar en SheetDB:', err);
-    alert('Error al guardar. Verifica tu conexión e intenta de nuevo.');
+    alert(`No se pudo guardar la información: ${err.message || 'Error de conexión'}. Por favor intenta de nuevo.`);
     btnSaveNext.disabled = false;
     updateSaveNextBtn();
   } finally {
